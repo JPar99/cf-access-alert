@@ -109,5 +109,6 @@ def validate() -> None:
     log.info("Pushover       : %s", "enabled" if PUSHOVER_USER_KEY else "disabled")
     log.info("Discord        : %s", "enabled" if DISCORD_WEBHOOK_URL else "disabled")
     log.info("Poll interval  : %ds", POLL_INTERVAL)
+    log.info("Lookback buffer: %ds", MIN_LOOKBACK)
     log.info("Notify retries : %d (delay %ds)", NOTIFY_RETRIES, NOTIFY_RETRY_DELAY)
     log.info("Max catchup    : %dd", MAX_CATCHUP // 86400)
