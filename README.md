@@ -25,8 +25,8 @@ Built for homelabs and self-hosters who protect applications (Immich, Jellyfin, 
 ```bash
 mkdir cf-access-alert && cd cf-access-alert
 # Download docker-compose.yml and .env.example from this repo
-curl -LO https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/cf-access-alert/main/docker-compose.yml
-curl -LO https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/cf-access-alert/main/.env.example
+curl -LO https://raw.githubusercontent.com/JPar99/cf-access-alert/main/docker-compose.yml
+curl -LO https://raw.githubusercontent.com/JPar99/cf-access-alert/main/.env.example
 cp .env.example .env
 chmod 600 .env
 nano .env
@@ -36,7 +36,7 @@ docker compose up -d
 ### Option 2: Build locally
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/cf-access-alert.git
+git clone https://github.com/JPar99/cf-access-alert.git
 cd cf-access-alert
 cp .env.example .env
 chmod 600 .env
@@ -73,9 +73,9 @@ At least one notification channel (Discord or Pushover) must be configured.
 | `NOTIFY_RETRIES` | `3` | Number of retry attempts per notification |
 | `NOTIFY_RETRY_DELAY` | `10s` | Base delay between retries (doubles each attempt) |
 | `TZ` | `UTC` | Timezone for logs and notifications (e.g. `Europe/Amsterdam`) |
+| `LOG_LEVEL` | `INFO` | Log level: `INFO` or `DEBUG` |
 
 Duration values support: `30s` (seconds), `10m` (minutes), `2h` (hours), `7d` (days). Plain numbers are treated as seconds for backwards compatibility.
-| `LOG_LEVEL` | `INFO` | Log level: `INFO` or `DEBUG` |
 
 ### Creating a Cloudflare API Token
 
@@ -108,16 +108,17 @@ CF_APP_UIDS=uid-one-here,uid-two-here,uid-three-here
 ## How It Works
 
 ```
-┌─────────────┐     poll every N sec     ┌──────────────────┐
-│  cf-access-  │ ──────────────────────> │  Cloudflare API   │
-│    alert     │ <────────────────────── │  Access Logs      │
-└──────┬───────┘     blocked events      └──────────────────┘
-       │
-       │  deduplicate by ray_id
-       │
-       ├──────────────> Discord webhook
-       │
-       └──────────────> Pushover API
+┌──────────────────┐    poll every N sec    ┌──────────────────┐
+│                  │ ─────────────────────> │                  │
+│  cf-access-alert │                        │  Cloudflare API  │
+│                  │ <───────────────────── │  Access Logs     │
+└────────┬─────────┘    blocked events      └──────────────────┘
+         │
+         │  deduplicate by ray_id
+         │
+         ├──────────────> Discord webhook
+         │
+         └──────────────> Pushover API
 ```
 
 1. Every `POLL_INTERVAL` seconds, queries the CF Access authentication logs API
@@ -154,7 +155,7 @@ This container is designed with security as the top priority:
 services:
   cf-access-alert:
     container_name: cf-access-alert
-    image: ghcr.io/YOUR_GITHUB_USERNAME/cf-access-alert:latest
+    image: ghcr.io/JPar99/cf-access-alert:latest
     # Uncomment to build locally instead:
     # build: .
     restart: unless-stopped

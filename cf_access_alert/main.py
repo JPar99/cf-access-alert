@@ -13,6 +13,7 @@ from .notifications import notify
 from .shutdown import GracefulShutdown
 from .state import load, save
 from .timeutil import utc_to_local
+from .updater import check_for_updates
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -34,6 +35,7 @@ def main() -> None:
     print_banner()
     shutdown = GracefulShutdown()
     config.validate()
+    check_for_updates()
 
     state = load()
     alerted_ids = state["alerted_ids"]
