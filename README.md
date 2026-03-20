@@ -106,10 +106,10 @@ CF_APP_UIDS=uid-one-here,uid-two-here,uid-three-here
 ## How It Works
 
 ```
-┌─────────────┐     poll every N sec     ┌──────────────────┐
-│  cf-access-  │ ──────────────────────> │  Cloudflare API   │
-│    alert     │ <────────────────────── │  Access Logs      │
-└──────┬───────┘     blocked events      └──────────────────┘
+┌─────────────┐     poll every N sec    ┌──────────────────┐
+│  cf-access- │ ──────────────────────> │  Cloudflare API  │
+│    alert    │ <────────────────────── │  Access Logs     │
+└──────┬──────┘     blocked events      └──────────────────┘
        │
        │  deduplicate by ray_id
        │
