@@ -72,8 +72,8 @@ def main() -> None:
 
         since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        log.info("Polling CF Access logs: %s -> %s",
-                 utc_to_local(since_str), utc_to_local(now_str))
+        log.info("Polling CF Access logs | checking from %s to %s | next poll in %ds",
+                 utc_to_local(since_str), utc_to_local(now_str), config.POLL_INTERVAL)
 
         events = fetch_logs(since_str, now_str, shutdown)
         blocked = filter_events(events)
