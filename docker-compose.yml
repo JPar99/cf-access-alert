@@ -1,7 +1,7 @@
 services:
   cf-access-alert:
     container_name: cf-access-alert
-    image: ghcr.io/JPar99/cf-access-alert:latest
+    image: ghcr.io/jpar99/cf-access-alert:latest
     # Uncomment the line below to build locally instead of pulling from GHCR, also make sure to comment out the image line above
     # build: .
     restart: unless-stopped

@@ -25,8 +25,8 @@ Built for homelabs and self-hosters who protect applications (Immich, Jellyfin, 
 ```bash
 mkdir cf-access-alert && cd cf-access-alert
 # Download docker-compose.yml and .env.example from this repo
-curl -LO https://raw.githubusercontent.com/JPar99/cf-access-alert/main/docker-compose.yml
-curl -LO https://raw.githubusercontent.com/JPar99/cf-access-alert/main/.env.example
+curl -LO https://raw.githubusercontent.com/jpar99/cf-access-alert/main/docker-compose.yml
+curl -LO https://raw.githubusercontent.com/jpar99/cf-access-alert/main/.env.example
 cp .env.example .env
 chmod 600 .env
 nano .env
@@ -36,7 +36,7 @@ docker compose up -d
 ### Option 2: Build locally
 
 ```bash
-git clone https://github.com/JPar99/cf-access-alert.git
+git clone https://github.com/jpar99/cf-access-alert.git
 cd cf-access-alert
 cp .env.example .env
 chmod 600 .env
@@ -152,7 +152,7 @@ This container is designed with security as the top priority:
 services:
   cf-access-alert:
     container_name: cf-access-alert
-    image: ghcr.io/JPar99/cf-access-alert:latest
+    image: ghcr.io/jpar99/cf-access-alert:latest
     # Uncomment to build locally instead:
     # build: .
     restart: unless-stopped
