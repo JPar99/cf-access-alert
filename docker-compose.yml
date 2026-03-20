@@ -1,0 +1,25 @@
+services:
+  cf-access-alert:
+    container_name: cf-access-alert
+    image: ghcr.io/JPar99/cf-access-alert:latest
+    # Uncomment the line below to build locally instead of pulling from GHCR, also make sure to comment out the image line above
+    # build: .
+    restart: unless-stopped
+    volumes:
+      - cf-access-alert-data:/data
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Europe/Amsterdam}
+    # No ports exposed — this container only makes outbound requests
+    # No docker.sock mounted — no access to host Docker
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=10m
+    mem_limit: 64m
+    cpus: 0.25
+
+volumes:
+  cf-access-alert-data:

@@ -1,0 +1,113 @@
+"""
+Configuration — load and validate environment variables.
+
+All secrets are read from env vars only. Redaction helpers ensure
+no secret value is ever written to stdout/stderr.
+"""
+
+import logging
+import os
+import re
+import sys
+
+log = logging.getLogger("cf-access-alert")
+
+# ---------------------------------------------------------------------------
+# Cloudflare
+# ---------------------------------------------------------------------------
+CF_API_TOKEN: str = os.environ.get("CF_API_TOKEN", "")
+CF_ACCOUNT_ID: str = os.environ.get("CF_ACCOUNT_ID", "")
+# Comma-separated list of app UIDs to monitor (empty = all apps)
+CF_APP_UIDS: set = set(
+    u.strip() for u in os.environ.get("CF_APP_UIDS", "").split(",") if u.strip()
+)
+CF_PAGE_SIZE: int = 100
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+PUSHOVER_USER_KEY: str = os.environ.get("PUSHOVER_USER_KEY", "")
+PUSHOVER_APP_TOKEN: str = os.environ.get("PUSHOVER_APP_TOKEN", "")
+PUSHOVER_PRIORITY: str = os.environ.get("PUSHOVER_PRIORITY", "0")
+PUSHOVER_SOUND: str = os.environ.get("PUSHOVER_SOUND", "pushover")
+DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
+
+# ---------------------------------------------------------------------------
+# Retry
+# ---------------------------------------------------------------------------
+NOTIFY_RETRIES: int = int(os.environ.get("NOTIFY_RETRIES", "3"))
+NOTIFY_RETRY_DELAY: int = int(os.environ.get("NOTIFY_RETRY_DELAY", "10"))
+
+# ---------------------------------------------------------------------------
+# State, catchup, and polling
+# ---------------------------------------------------------------------------
+POLL_INTERVAL: int = int(os.environ.get("POLL_INTERVAL", "300"))
+STATE_FILE: str = "/data/last_seen.json"
+MIN_LOOKBACK: int = int(os.environ.get("LOOKBACK_BUFFER", "600"))
+MAX_CATCHUP: int = int(os.environ.get("MAX_CATCHUP", "604800"))
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+LOG_LEVEL: str = os.environ.get("LOG_LEVEL", "INFO").upper()
+
+
+# ---------------------------------------------------------------------------
+# Redaction helpers
+# ---------------------------------------------------------------------------
+
+def redact(value: str) -> str:
+    """Return a redacted representation safe for logs."""
+    if not value:
+        return "(empty)"
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...***"
+
+
+def redact_url(url: str) -> str:
+    """Redact account IDs and webhook tokens from URLs."""
+    url = re.sub(r"/accounts/[a-f0-9]+/", "/accounts/REDACTED/", url)
+    url = re.sub(r"(/webhooks/\d+/)[\w\-]+", r"\1REDACTED", url)
+    return url
+
+
+def redact_payload(payload: dict, service_name: str) -> dict:
+    """Return a copy of payload with secret fields redacted."""
+    safe = dict(payload)
+    if service_name == "Pushover":
+        if "token" in safe:
+            safe["token"] = redact(safe["token"])
+        if "user" in safe:
+            safe["user"] = redact(safe["user"])
+    return safe
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+def validate() -> None:
+    """Validate required config and log startup summary."""
+    missing = []
+    if not CF_API_TOKEN:
+        missing.append("CF_API_TOKEN")
+    if not CF_ACCOUNT_ID:
+        missing.append("CF_ACCOUNT_ID")
+    if not PUSHOVER_USER_KEY and not DISCORD_WEBHOOK_URL:
+        missing.append("PUSHOVER_USER_KEY or DISCORD_WEBHOOK_URL (need at least one)")
+    if PUSHOVER_USER_KEY and not PUSHOVER_APP_TOKEN:
+        missing.append("PUSHOVER_APP_TOKEN (required when PUSHOVER_USER_KEY is set)")
+    if missing:
+        log.error("Missing required environment variables: %s", ", ".join(missing))
+        sys.exit(1)
+
+    log.info("Log level      : %s", LOG_LEVEL)
+    log.info("CF_ACCOUNT_ID  : %s", redact(CF_ACCOUNT_ID))
+    log.info("CF_APP_UIDS    : %s",
+             ", ".join(sorted(CF_APP_UIDS)) if CF_APP_UIDS else "(all apps)")
+    log.info("Pushover       : %s", "enabled" if PUSHOVER_USER_KEY else "disabled")
+    log.info("Discord        : %s", "enabled" if DISCORD_WEBHOOK_URL else "disabled")
+    log.info("Poll interval  : %ds", POLL_INTERVAL)
+    log.info("Notify retries : %d (delay %ds)", NOTIFY_RETRIES, NOTIFY_RETRY_DELAY)
+    log.info("Max catchup    : %dd", MAX_CATCHUP // 86400)
