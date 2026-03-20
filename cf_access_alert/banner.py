@@ -1,6 +1,6 @@
 """Startup banner — ASCII art logo and version info."""
 
-VERSION = "1.0.0"
+VERSION = "1.0.3"
 
 BANNER = r"""
                                               
@@ -36,6 +36,6 @@ def print_banner() -> None:
     print(f"  cf-access-alert v{VERSION}")
     print(f"  Cloudflare Access login alert monitor")
     print()
-    print(f"  Copyright (C) 2026 Shaq")
+    print(f"  Copyright (C) 2026 Shaq Shaq — https://github.com/jpar99")
     print(f"  License: GNU GPL v3 — https://www.gnu.org/licenses/gpl-3.0.html")
     print()
