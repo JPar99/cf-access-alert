@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from . import config
 from .banner import print_banner
 from .cloudflare import fetch_logs, filter_events
+from .config import format_duration
 from .notifications import notify
 from .shutdown import GracefulShutdown
 from .state import load, save
@@ -72,8 +73,8 @@ def main() -> None:
 
         since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        log.info("Polling CF Access logs | checking from %s to %s | next poll in %ds",
-                 utc_to_local(since_str), utc_to_local(now_str), config.POLL_INTERVAL)
+        log.info("Polling CF Access logs | checking from %s to %s | next poll in %s",
+                 utc_to_local(since_str), utc_to_local(now_str), format_duration(config.POLL_INTERVAL))
 
         events = fetch_logs(since_str, now_str, shutdown)
         blocked = filter_events(events)

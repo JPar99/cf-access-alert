@@ -25,8 +25,8 @@ Built for homelabs and self-hosters who protect applications (Immich, Jellyfin, 
 ```bash
 mkdir cf-access-alert && cd cf-access-alert
 # Download docker-compose.yml and .env.example from this repo
-curl -LO https://raw.githubusercontent.com/jpar99/cf-access-alert/main/docker-compose.yml
-curl -LO https://raw.githubusercontent.com/jpar99/cf-access-alert/main/.env.example
+curl -LO https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/cf-access-alert/main/docker-compose.yml
+curl -LO https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/cf-access-alert/main/.env.example
 cp .env.example .env
 chmod 600 .env
 nano .env
@@ -36,7 +36,7 @@ docker compose up -d
 ### Option 2: Build locally
 
 ```bash
-git clone https://github.com/jpar99/cf-access-alert.git
+git clone https://github.com/YOUR_GITHUB_USERNAME/cf-access-alert.git
 cd cf-access-alert
 cp .env.example .env
 chmod 600 .env
@@ -67,12 +67,14 @@ At least one notification channel (Discord or Pushover) must be configured.
 | `CF_APP_UIDS` | *(empty — all apps)* | Comma-separated Access application UUIDs to monitor |
 | `PUSHOVER_PRIORITY` | `0` | Pushover priority: `-1` (silent), `0` (normal), `1` (high) |
 | `PUSHOVER_SOUND` | `pushover` | Pushover notification sound |
-| `POLL_INTERVAL` | `300` | Seconds between polls |
-| `LOOKBACK_BUFFER` | `600` | Seconds to look back each poll (accounts for CF log delay) |
-| `MAX_CATCHUP` | `604800` | Max catchup window after downtime (seconds, default 7 days) |
+| `POLL_INTERVAL` | `5m` | How often to poll CF Access logs |
+| `LOOKBACK_BUFFER` | `10m` | How far back to look each poll (accounts for CF log delay) |
+| `MAX_CATCHUP` | `7d` | Max catchup window after container downtime |
 | `NOTIFY_RETRIES` | `3` | Number of retry attempts per notification |
-| `NOTIFY_RETRY_DELAY` | `10` | Base delay between retries in seconds (doubles each attempt) |
+| `NOTIFY_RETRY_DELAY` | `10s` | Base delay between retries (doubles each attempt) |
 | `TZ` | `UTC` | Timezone for logs and notifications (e.g. `Europe/Amsterdam`) |
+
+Duration values support: `30s` (seconds), `10m` (minutes), `2h` (hours), `7d` (days). Plain numbers are treated as seconds for backwards compatibility.
 | `LOG_LEVEL` | `INFO` | Log level: `INFO` or `DEBUG` |
 
 ### Creating a Cloudflare API Token
@@ -106,10 +108,10 @@ CF_APP_UIDS=uid-one-here,uid-two-here,uid-three-here
 ## How It Works
 
 ```
-┌─────────────┐     poll every N sec    ┌──────────────────┐
-│  cf-access- │ ──────────────────────> │  Cloudflare API  │
-│    alert    │ <────────────────────── │  Access Logs     │
-└──────┬──────┘     blocked events      └──────────────────┘
+┌─────────────┐     poll every N sec     ┌──────────────────┐
+│  cf-access-  │ ──────────────────────> │  Cloudflare API   │
+│    alert     │ <────────────────────── │  Access Logs      │
+└──────┬───────┘     blocked events      └──────────────────┘
        │
        │  deduplicate by ray_id
        │
@@ -152,7 +154,7 @@ This container is designed with security as the top priority:
 services:
   cf-access-alert:
     container_name: cf-access-alert
-    image: ghcr.io/jpar99/cf-access-alert:latest
+    image: ghcr.io/YOUR_GITHUB_USERNAME/cf-access-alert:latest
     # Uncomment to build locally instead:
     # build: .
     restart: unless-stopped

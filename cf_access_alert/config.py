@@ -12,6 +12,38 @@ import sys
 
 log = logging.getLogger("cf-access-alert")
 
+
+# ---------------------------------------------------------------------------
+# Duration parser — supports 30s, 10m, 2h, 7d or plain seconds
+# ---------------------------------------------------------------------------
+
+def parse_duration(value: str, default: int) -> int:
+    """Parse a duration string like '30s', '10m', '2h', '7d' into seconds.
+    Plain integers are treated as seconds for backwards compatibility."""
+    value = value.strip().lower()
+    if not value:
+        return default
+    match = re.match(r"^(\d+)\s*(s|m|h|d)?$", value)
+    if not match:
+        log.warning("Invalid duration '%s', using default %ds", value, default)
+        return default
+    num = int(match.group(1))
+    unit = match.group(2) or "s"
+    multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    return num * multipliers[unit]
+
+
+def format_duration(seconds: int) -> str:
+    """Format seconds into a human-readable string like '5m', '2h', '7d'."""
+    if seconds >= 86400 and seconds % 86400 == 0:
+        return f"{seconds // 86400}d"
+    if seconds >= 3600 and seconds % 3600 == 0:
+        return f"{seconds // 3600}h"
+    if seconds >= 60 and seconds % 60 == 0:
+        return f"{seconds // 60}m"
+    return f"{seconds}s"
+
+
 # ---------------------------------------------------------------------------
 # Cloudflare
 # ---------------------------------------------------------------------------
@@ -36,15 +68,15 @@ DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
 # Retry
 # ---------------------------------------------------------------------------
 NOTIFY_RETRIES: int = int(os.environ.get("NOTIFY_RETRIES", "3"))
-NOTIFY_RETRY_DELAY: int = int(os.environ.get("NOTIFY_RETRY_DELAY", "10"))
+NOTIFY_RETRY_DELAY: int = parse_duration(os.environ.get("NOTIFY_RETRY_DELAY", "10s"), 10)
 
 # ---------------------------------------------------------------------------
 # State, catchup, and polling
 # ---------------------------------------------------------------------------
-POLL_INTERVAL: int = int(os.environ.get("POLL_INTERVAL", "300"))
+POLL_INTERVAL: int = parse_duration(os.environ.get("POLL_INTERVAL", "5m"), 300)
 STATE_FILE: str = "/data/last_seen.json"
-MIN_LOOKBACK: int = int(os.environ.get("LOOKBACK_BUFFER", "600"))
-MAX_CATCHUP: int = int(os.environ.get("MAX_CATCHUP", "604800"))
+MIN_LOOKBACK: int = parse_duration(os.environ.get("LOOKBACK_BUFFER", "10m"), 600)
+MAX_CATCHUP: int = parse_duration(os.environ.get("MAX_CATCHUP", "7d"), 604800)
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -108,7 +140,7 @@ def validate() -> None:
              ", ".join(sorted(CF_APP_UIDS)) if CF_APP_UIDS else "(all apps)")
     log.info("Pushover       : %s", "enabled" if PUSHOVER_USER_KEY else "disabled")
     log.info("Discord        : %s", "enabled" if DISCORD_WEBHOOK_URL else "disabled")
-    log.info("Poll interval  : %ds", POLL_INTERVAL)
-    log.info("Lookback buffer: %ds", MIN_LOOKBACK)
-    log.info("Notify retries : %d (delay %ds)", NOTIFY_RETRIES, NOTIFY_RETRY_DELAY)
-    log.info("Max catchup    : %dd", MAX_CATCHUP // 86400)
+    log.info("Poll interval  : %s", format_duration(POLL_INTERVAL))
+    log.info("Lookback buffer: %s", format_duration(MIN_LOOKBACK))
+    log.info("Notify retries : %d (delay %s)", NOTIFY_RETRIES, format_duration(NOTIFY_RETRY_DELAY))
+    log.info("Max catchup    : %s", format_duration(MAX_CATCHUP))
