@@ -21,4 +21,8 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 
+# Health check — no HTTP port, just checks state file freshness
+HEALTHCHECK --interval=60s --timeout=5s --start-period=120s --retries=3 \
+    CMD ["python3", "/app/cf_access_alert/healthcheck.py"]
+
 ENTRYPOINT ["python3", "/app/run.py"]
