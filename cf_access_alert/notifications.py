@@ -60,7 +60,7 @@ def _post_json(url: str, payload: dict, service_name: str,
 
 
 # ---------------------------------------------------------------------------
-# ntfy helper — shared between event and burst senders
+# ntfy helper — shared between event, burst, and digest senders
 # ---------------------------------------------------------------------------
 
 def _ntfy_post(payload: dict, label: str, shutdown=None) -> bool:
@@ -339,4 +339,118 @@ def notify_burst(burst: dict, shutdown=None) -> bool:
     pushover_ok = _notify_burst_pushover(burst, shutdown)
     discord_ok = _notify_burst_discord(burst, shutdown)
     ntfy_ok = _notify_burst_ntfy(burst, shutdown)
+    return pushover_ok and discord_ok and ntfy_ok
+
+
+# ---------------------------------------------------------------------------
+# Unified notify — daily digest
+# ---------------------------------------------------------------------------
+
+def _format_top_list(items: list[tuple[str, int]], label: str) -> str:
+    """Format a list of (name, count) tuples into a readable string."""
+    if not items:
+        return f"  {label}: (none)"
+    lines = [f"  {label}:"]
+    for name, count in items:
+        lines.append(f"    {name}: {count}")
+    return "\n".join(lines)
+
+
+def _digest_message(digest: dict) -> str:
+    """Build the plain-text digest message body."""
+    lines = [
+        f"Daily summary:",
+        f"  Total blocked: {digest['total_blocked']}",
+        f"  Burst alerts: {digest['total_bursts']}",
+        f"  Unique IPs: {digest['unique_ips']}",
+        f"  Unique emails: {digest['unique_emails']}",
+        "",
+        _format_top_list(digest["top_ips"], "Top IPs"),
+        _format_top_list(digest["top_emails"], "Top emails"),
+        _format_top_list(digest["top_apps"], "Top apps"),
+        _format_top_list(digest["top_countries"], "Top countries"),
+    ]
+    return "\n".join(lines)
+
+
+def _notify_digest_pushover(digest: dict, shutdown=None) -> bool:
+    """Send digest via Pushover."""
+    if not config.PUSHOVER_USER_KEY:
+        return True
+
+    payload = {
+        "token": config.PUSHOVER_APP_TOKEN,
+        "user": config.PUSHOVER_USER_KEY,
+        "title": f"📊 CF Access daily digest",
+        "message": _digest_message(digest),
+        "priority": "-1",
+        "sound": config.PUSHOVER_SOUND,
+    }
+    return _post_json(
+        "https://api.pushover.net/1/messages.json", payload, "Pushover", shutdown
+    )
+
+
+def _notify_digest_discord(digest: dict, shutdown=None) -> bool:
+    """Send digest via Discord."""
+    if not config.DISCORD_WEBHOOK_URL:
+        return True
+
+    def _top_field(items: list[tuple[str, int]]) -> str:
+        if not items:
+            return "(none)"
+        return "\n".join(f"`{name}`: {count}" for name, count in items)
+
+    payload = {
+        "username": "CF Access Alert",
+        "embeds": [
+            {
+                "title": "📊 Daily digest",
+                "color": 0x3498DB,
+                "fields": [
+                    {"name": "Total Blocked", "value": str(digest["total_blocked"]), "inline": True},
+                    {"name": "Burst Alerts", "value": str(digest["total_bursts"]), "inline": True},
+                    {"name": "Unique IPs", "value": str(digest["unique_ips"]), "inline": True},
+                    {"name": "Top IPs", "value": _top_field(digest["top_ips"]), "inline": False},
+                    {"name": "Top Emails", "value": _top_field(digest["top_emails"]), "inline": False},
+                    {"name": "Top Apps", "value": _top_field(digest["top_apps"]), "inline": True},
+                    {"name": "Top Countries", "value": _top_field(digest["top_countries"]), "inline": True},
+                ],
+            }
+        ],
+    }
+    return _post_json(config.DISCORD_WEBHOOK_URL, payload, "Discord", shutdown)
+
+
+def _notify_digest_ntfy(digest: dict, shutdown=None) -> bool:
+    """Send digest via ntfy."""
+    payload = {
+        "topic": config.NTFY_TOPIC,
+        "title": "📊 CF Access daily digest",
+        "message": _digest_message(digest),
+        "tags": ["bar_chart"],
+        "priority": 3,
+    }
+    return _ntfy_post(payload, "digest", shutdown)
+
+
+def notify_digest(digest: dict, shutdown=None) -> bool:
+    """Send daily digest to all configured channels. Returns True if all succeeded."""
+    if digest["total_blocked"] == 0:
+        log.info("Daily digest: no blocked events — sending quiet summary")
+    else:
+        log.info(
+            "Daily digest: %d blocked events, %d bursts, %d unique IPs",
+            digest["total_blocked"], digest["total_bursts"],
+            digest["unique_ips"],
+        )
+
+    pushover_ok = _notify_digest_pushover(digest, shutdown)
+    discord_ok = _notify_digest_discord(digest, shutdown)
+    ntfy_ok = _notify_digest_ntfy(digest, shutdown)
+    return pushover_ok and discord_ok and ntfy_ok
+
+    pushover_ok = _notify_digest_pushover(digest, shutdown)
+    discord_ok = _notify_digest_discord(digest, shutdown)
+    ntfy_ok = _notify_digest_ntfy(digest, shutdown)
     return pushover_ok and discord_ok and ntfy_ok

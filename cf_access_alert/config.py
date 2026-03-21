@@ -77,6 +77,19 @@ BURST_THRESHOLD: int = int(os.environ.get("BURST_THRESHOLD", "5"))
 BURST_WINDOW: int = parse_duration(os.environ.get("BURST_WINDOW", "5m"), 300)
 
 # ---------------------------------------------------------------------------
+# Daily digest
+# ---------------------------------------------------------------------------
+DIGEST_ENABLED: bool = os.environ.get("DIGEST_ENABLED", "true").lower() in ("true", "1", "yes")
+_digest_time_raw: str = os.environ.get("DIGEST_TIME", "08:00")
+try:
+    _dt_parts = _digest_time_raw.strip().split(":")
+    DIGEST_HOUR: int = int(_dt_parts[0])
+    DIGEST_MINUTE: int = int(_dt_parts[1]) if len(_dt_parts) > 1 else 0
+except (ValueError, IndexError):
+    DIGEST_HOUR: int = 8
+    DIGEST_MINUTE: int = 0
+
+# ---------------------------------------------------------------------------
 # Retry
 # ---------------------------------------------------------------------------
 NOTIFY_RETRIES: int = int(os.environ.get("NOTIFY_RETRIES", "3"))
@@ -155,6 +168,8 @@ def validate() -> None:
     log.info("ntfy           : %s", f"enabled ({NTFY_URL})" if NTFY_TOPIC else "disabled")
     log.info("Burst detect   : threshold=%d in %s window",
              BURST_THRESHOLD, format_duration(BURST_WINDOW))
+    log.info("Daily digest   : %s (at %02d:%02d local)",
+             "enabled" if DIGEST_ENABLED else "disabled", DIGEST_HOUR, DIGEST_MINUTE)
     log.info("Poll interval  : %s", format_duration(POLL_INTERVAL))
     log.info("Lookback buffer: %s", format_duration(MIN_LOOKBACK))
     log.info("Notify retries : %d (delay %s)", NOTIFY_RETRIES, format_duration(NOTIFY_RETRY_DELAY))

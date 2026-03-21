@@ -1,4 +1,4 @@
-"""Main entrypoint — polling loop with catchup, deduplication, and burst detection."""
+"""Main entrypoint — polling loop with catchup, deduplication, burst detection, and daily digest."""
 
 import logging
 import sys
@@ -10,7 +10,8 @@ from .banner import print_banner
 from .burst import BurstTracker
 from .cloudflare import fetch_logs, filter_events
 from .config import format_duration
-from .notifications import notify, notify_burst
+from .digest import DigestAccumulator, compute_next_digest, is_digest_due
+from .notifications import notify, notify_burst, notify_digest
 from .shutdown import GracefulShutdown
 from .state import load, save
 from .timeutil import utc_to_local
@@ -41,19 +42,43 @@ def main() -> None:
     state = load()
     alerted_ids = state["alerted_ids"]
     last_poll = state["last_poll"]
+    next_digest_at = state.get("next_digest_at")
 
     log.info("Loaded %d previously alerted ray_id(s)", len(alerted_ids))
     if last_poll:
         log.info("Last successful poll: %s", utc_to_local(last_poll))
 
     burst_tracker = BurstTracker()
+    digest = DigestAccumulator()
+
+    # Always (re)calculate digest schedule on startup so DIGEST_TIME changes take effect
+    if config.DIGEST_ENABLED:
+        now = datetime.now(timezone.utc)
+        local_now = now.astimezone()
+        next_dt = compute_next_digest(local_now)
+        next_digest_at = next_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        log.info("Digest scheduled: next at %s", utc_to_local(next_digest_at))
+
     first_run = True
 
     while not shutdown.should_exit:
         now = datetime.now(timezone.utc)
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Determine how far back to look
+        # --- Check if digest is due ---
+        if config.DIGEST_ENABLED and is_digest_due(next_digest_at):
+            summary = digest.build_summary()
+            notify_digest(summary, shutdown)
+            digest.reset()
+
+            # Schedule next digest
+            local_now = now.astimezone()
+            next_dt = compute_next_digest(local_now)
+            next_digest_at = next_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            log.info("Next digest scheduled: %s", utc_to_local(next_digest_at))
+            save(alerted_ids, last_poll, next_digest_at)
+
+        # --- Determine how far back to look ---
         if last_poll:
             last_poll_dt = datetime.strptime(
                 last_poll, "%Y-%m-%dT%H:%M:%SZ"
@@ -96,16 +121,18 @@ def main() -> None:
             # Run burst detection on the new batch
             individual, bursts = burst_tracker.classify(new_blocked)
 
-            # Send individual alerts for non-burst events
+            # Send individual alerts and feed digest
             for ev in individual:
                 notify(ev, shutdown)
                 alerted_ids.add(ev.get("ray_id"))
+                digest.record_event(ev)
 
-            # Send burst summaries and mark all burst events as alerted
+            # Send burst summaries and feed digest
             for burst in bursts:
                 notify_burst(burst, shutdown)
+                digest.record_burst(burst)
 
-            # Mark all new events as alerted (burst or not) to avoid re-alerting
+            # Mark all new events as alerted (burst or not)
             for ev in new_blocked:
                 alerted_ids.add(ev.get("ray_id"))
         else:
@@ -116,7 +143,7 @@ def main() -> None:
                 log.info("No blocked events found")
 
         last_poll = now_str
-        save(alerted_ids, last_poll)
+        save(alerted_ids, last_poll, next_digest_at)
         first_run = False
 
         # Interruptible sleep
@@ -126,5 +153,5 @@ def main() -> None:
             time.sleep(1)
 
     log.info("Saving state before exit")
-    save(alerted_ids, last_poll)
+    save(alerted_ids, last_poll, next_digest_at)
     log.info("Shutdown complete")
