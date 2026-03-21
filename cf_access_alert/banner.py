@@ -1,6 +1,6 @@
 """Startup banner — ASCII art logo and version info."""
 
-VERSION = "1.1.0"
+VERSION = "2.2.1"
 
 BANNER = r"""
                                               
