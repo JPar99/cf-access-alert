@@ -1,4 +1,4 @@
-"""Main entrypoint — polling loop with catchup and deduplication."""
+"""Main entrypoint — polling loop with catchup, deduplication, and burst detection."""
 
 import logging
 import sys
@@ -7,9 +7,10 @@ from datetime import datetime, timedelta, timezone
 
 from . import config
 from .banner import print_banner
+from .burst import BurstTracker
 from .cloudflare import fetch_logs, filter_events
 from .config import format_duration
-from .notifications import notify
+from .notifications import notify, notify_burst
 from .shutdown import GracefulShutdown
 from .state import load, save
 from .timeutil import utc_to_local
@@ -45,6 +46,7 @@ def main() -> None:
     if last_poll:
         log.info("Last successful poll: %s", utc_to_local(last_poll))
 
+    burst_tracker = BurstTracker()
     first_run = True
 
     while not shutdown.should_exit:
@@ -90,8 +92,21 @@ def main() -> None:
                 "Found %d new blocked event(s) (%d total, %d already alerted)",
                 len(new_blocked), len(blocked), len(blocked) - len(new_blocked),
             )
-            for ev in new_blocked:
+
+            # Run burst detection on the new batch
+            individual, bursts = burst_tracker.classify(new_blocked)
+
+            # Send individual alerts for non-burst events
+            for ev in individual:
                 notify(ev, shutdown)
+                alerted_ids.add(ev.get("ray_id"))
+
+            # Send burst summaries and mark all burst events as alerted
+            for burst in bursts:
+                notify_burst(burst, shutdown)
+
+            # Mark all new events as alerted (burst or not) to avoid re-alerting
+            for ev in new_blocked:
                 alerted_ids.add(ev.get("ray_id"))
         else:
             if blocked:

@@ -71,6 +71,12 @@ NTFY_TOKEN: str = os.environ.get("NTFY_TOKEN", "")
 NTFY_PRIORITY: int = int(os.environ.get("NTFY_PRIORITY", "4"))  # 1-5, 4=high
 
 # ---------------------------------------------------------------------------
+# Burst detection
+# ---------------------------------------------------------------------------
+BURST_THRESHOLD: int = int(os.environ.get("BURST_THRESHOLD", "5"))
+BURST_WINDOW: int = parse_duration(os.environ.get("BURST_WINDOW", "5m"), 300)
+
+# ---------------------------------------------------------------------------
 # Retry
 # ---------------------------------------------------------------------------
 NOTIFY_RETRIES: int = int(os.environ.get("NOTIFY_RETRIES", "3"))
@@ -147,6 +153,8 @@ def validate() -> None:
     log.info("Pushover       : %s", "enabled" if PUSHOVER_USER_KEY else "disabled")
     log.info("Discord        : %s", "enabled" if DISCORD_WEBHOOK_URL else "disabled")
     log.info("ntfy           : %s", f"enabled ({NTFY_URL})" if NTFY_TOPIC else "disabled")
+    log.info("Burst detect   : threshold=%d in %s window",
+             BURST_THRESHOLD, format_duration(BURST_WINDOW))
     log.info("Poll interval  : %s", format_duration(POLL_INTERVAL))
     log.info("Lookback buffer: %s", format_duration(MIN_LOOKBACK))
     log.info("Notify retries : %d (delay %s)", NOTIFY_RETRIES, format_duration(NOTIFY_RETRY_DELAY))
