@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 from . import config
 from .config import redact_url, redact_payload, format_duration
@@ -108,6 +108,121 @@ def _ntfy_post(payload: dict, label: str, shutdown=None) -> bool:
 
     log.error("%s failed after %d attempts", service_name, config.NOTIFY_RETRIES)
     return False
+
+
+# ---------------------------------------------------------------------------
+# Startup verification — check that notification channels are reachable
+# ---------------------------------------------------------------------------
+
+def _verify_pushover() -> bool:
+    """Validate Pushover credentials via their user/validate endpoint."""
+    if not config.PUSHOVER_USER_KEY:
+        return True
+
+    url = "https://api.pushover.net/1/users/validate.json"
+    payload = {
+        "token": config.PUSHOVER_APP_TOKEN,
+        "user": config.PUSHOVER_USER_KEY,
+    }
+    data = json.dumps(payload).encode()
+
+    req = Request(url, data=data, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("User-Agent", "cf-access-alert/1.0")
+
+    try:
+        with urlopen(req, timeout=10) as resp:
+            body = json.loads(resp.read().decode())
+            if body.get("status") == 1:
+                log.info("Pushover      : verified ✓")
+                return True
+            log.warning("Pushover      : validation failed — %s",
+                        ", ".join(body.get("errors", ["unknown error"])))
+            return False
+    except HTTPError as exc:
+        log.warning("Pushover      : validation failed — HTTP %s "
+                    "(check PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY)", exc.code)
+        return False
+    except (URLError, OSError) as exc:
+        log.warning("Pushover      : unreachable — %s", exc)
+        return False
+
+
+def _verify_discord() -> bool:
+    """Verify Discord webhook by fetching its metadata (GET, no message sent)."""
+    if not config.DISCORD_WEBHOOK_URL:
+        return True
+
+    req = Request(config.DISCORD_WEBHOOK_URL, method="GET")
+    req.add_header("User-Agent", "cf-access-alert/1.0")
+
+    try:
+        with urlopen(req, timeout=10) as resp:
+            body = json.loads(resp.read().decode())
+            channel = body.get("name", "unknown")
+            log.info("Discord       : verified ✓ (webhook: %s)", channel)
+            return True
+    except HTTPError as exc:
+        log.warning("Discord       : verification failed — HTTP %s "
+                    "(check DISCORD_WEBHOOK_URL)", exc.code)
+        return False
+    except (URLError, OSError) as exc:
+        log.warning("Discord       : unreachable — %s", exc)
+        return False
+
+
+def _verify_ntfy() -> bool:
+    """Verify ntfy server is reachable and topic is accessible."""
+    if not config.NTFY_TOPIC:
+        return True
+
+    # Poll the topic for 0 messages — verifies server, topic, and auth
+    url = f"{config.NTFY_URL.rstrip('/')}/{config.NTFY_TOPIC}/json?poll=1&since=0"
+
+    req = Request(url, method="GET")
+    req.add_header("User-Agent", "cf-access-alert/1.0")
+    if config.NTFY_TOKEN:
+        req.add_header("Authorization", f"Bearer {config.NTFY_TOKEN}")
+
+    try:
+        with urlopen(req, timeout=10) as resp:
+            if resp.status < 300:
+                log.info("ntfy          : verified ✓ (%s)",
+                         config.NTFY_URL)
+                return True
+            log.warning("ntfy          : returned HTTP %s", resp.status)
+            return False
+    except HTTPError as exc:
+        if exc.code == 401 or exc.code == 403:
+            log.warning("ntfy          : auth failed — HTTP %s "
+                        "(check NTFY_TOKEN)", exc.code)
+        else:
+            log.warning("ntfy          : verification failed — HTTP %s", exc.code)
+        return False
+    except (URLError, OSError) as exc:
+        log.warning("ntfy          : unreachable — %s", exc)
+        return False
+
+
+def verify_channels() -> bool:
+    """
+    Verify all enabled notification channels on startup.
+
+    Logs results per channel. Returns True if all enabled channels
+    passed, False if any failed. Does NOT block startup on failure —
+    the caller decides what to do.
+    """
+    results = []
+    results.append(_verify_pushover())
+    results.append(_verify_discord())
+    results.append(_verify_ntfy())
+
+    if all(results):
+        log.info("All notification channels verified")
+    else:
+        log.warning("One or more notification channels failed verification — "
+                    "alerts may not be delivered")
+    return all(results)
 
 
 # ---------------------------------------------------------------------------

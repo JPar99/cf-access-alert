@@ -11,7 +11,7 @@ from .burst import BurstTracker
 from .cloudflare import fetch_logs, filter_events
 from .config import format_duration
 from .digest import DigestAccumulator, compute_next_digest, is_digest_due
-from .notifications import notify, notify_burst, notify_digest
+from .notifications import notify, notify_burst, notify_digest, verify_channels
 from .shutdown import GracefulShutdown
 from .state import load, save
 from .timeutil import utc_to_local
@@ -38,6 +38,7 @@ def main() -> None:
     shutdown = GracefulShutdown()
     config.validate()
     check_for_updates()
+    verify_channels()
 
     state = load()
     alerted_ids = state["alerted_ids"]      # ordered list (for trimming)
