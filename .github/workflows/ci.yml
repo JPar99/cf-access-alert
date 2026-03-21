@@ -20,4 +20,6 @@ jobs:
         run: python -m py_compile run.py && python -m compileall cf_access_alert/
 
       - name: Import check (module resolution)
-        run: python -c "from cf_access_alert import main, config, cloudflare, notifications, burst, digest, state, shutdown, timeutil, updater, healthcheck, banner"
+        run: |
+          python -c "from cf_access_alert import main, config, cloudflare, notifications, burst, digest, state, shutdown, timeutil, updater, healthcheck, banner"
+          python -c "from cf_access_alert.channels import ALL_CHANNELS; from cf_access_alert.channels.base import NotificationChannel; from cf_access_alert.channels.pushover import PushoverChannel; from cf_access_alert.channels.discord import DiscordChannel; from cf_access_alert.channels.ntfy import NtfyChannel"
