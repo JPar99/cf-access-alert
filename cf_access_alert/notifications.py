@@ -1,221 +1,36 @@
-"""Notification senders — Discord, Pushover, ntfy, with retry and exponential backoff."""
+"""Notification dispatcher — routes alerts to all active channels.
 
-import json
+Channel implementations live in the ``channels/`` package. This module
+provides the same public API consumed by ``main.py``:
+
+- ``verify_channels()``
+- ``notify(event, shutdown)``
+- ``notify_burst(burst, shutdown)``
+- ``notify_digest(digest, shutdown)``
+"""
+
 import logging
-import time
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
 
-from . import config
-from .config import redact_url, redact_payload, format_duration
+from .channels import get_active_channels, ALL_CHANNELS
+from .config import format_duration
 from .timeutil import format_event_time
 
 log = logging.getLogger("cf-access-alert")
 
 
 # ---------------------------------------------------------------------------
-# Generic POST with retry
+# Startup verification
 # ---------------------------------------------------------------------------
-
-def _post_json(url: str, payload: dict, service_name: str,
-               shutdown=None) -> bool:
-    """POST JSON to a URL with retry. Returns True on success."""
-    data = json.dumps(payload).encode()
-
-    for attempt in range(1, config.NOTIFY_RETRIES + 1):
-        if shutdown and shutdown.should_exit:
-            log.info("%s skipped — shutting down", service_name)
-            return False
-
-        log.debug("%s POST to: %s (attempt %d/%d)",
-                  service_name, redact_url(url), attempt, config.NOTIFY_RETRIES)
-        if attempt == 1:
-            log.debug("%s payload: %s",
-                      service_name, json.dumps(redact_payload(payload, service_name)))
-
-        req = Request(url, data=data, method="POST")
-        req.add_header("Content-Type", "application/json")
-        req.add_header("User-Agent", "cf-access-alert/1.0")
-
-        try:
-            with urlopen(req, timeout=15) as resp:
-                if resp.status < 300:
-                    log.info("%s success: HTTP %s", service_name, resp.status)
-                    return True
-                log.warning("%s returned HTTP %s", service_name, resp.status)
-        except HTTPError as exc:
-            log.warning("%s HTTP error %s (attempt %d/%d)",
-                        service_name, exc.code, attempt, config.NOTIFY_RETRIES)
-        except Exception:
-            log.exception("%s request failed (attempt %d/%d)",
-                          service_name, attempt, config.NOTIFY_RETRIES)
-
-        if attempt < config.NOTIFY_RETRIES:
-            delay = config.NOTIFY_RETRY_DELAY * (2 ** (attempt - 1))
-            log.info("%s retrying in %ds", service_name, delay)
-            time.sleep(delay)
-
-    log.error("%s failed after %d attempts", service_name, config.NOTIFY_RETRIES)
-    return False
-
-
-# ---------------------------------------------------------------------------
-# ntfy helper — shared between event, burst, and digest senders
-# ---------------------------------------------------------------------------
-
-def _ntfy_post(payload: dict, label: str, shutdown=None) -> bool:
-    """POST a payload to ntfy with auth and retry. Returns True on success."""
-    if not config.NTFY_TOPIC:
-        return True
-
-    url = config.NTFY_URL.rstrip("/")
-    service_name = f"ntfy ({label})"
-    data = json.dumps(payload).encode()
-
-    for attempt in range(1, config.NOTIFY_RETRIES + 1):
-        if shutdown and shutdown.should_exit:
-            log.info("%s skipped — shutting down", service_name)
-            return False
-
-        log.debug("%s POST to: %s (attempt %d/%d)",
-                  service_name, redact_url(url), attempt, config.NOTIFY_RETRIES)
-        if attempt == 1:
-            log.debug("%s payload: %s", service_name, json.dumps(payload))
-
-        req = Request(url, data=data, method="POST")
-        req.add_header("Content-Type", "application/json")
-        req.add_header("User-Agent", "cf-access-alert/1.0")
-        if config.NTFY_TOKEN:
-            req.add_header("Authorization", f"Bearer {config.NTFY_TOKEN}")
-
-        try:
-            with urlopen(req, timeout=15) as resp:
-                if resp.status < 300:
-                    log.info("%s success: HTTP %s", service_name, resp.status)
-                    return True
-                log.warning("%s returned HTTP %s", service_name, resp.status)
-        except HTTPError as exc:
-            log.warning("%s HTTP error %s (attempt %d/%d)",
-                        service_name, exc.code, attempt, config.NOTIFY_RETRIES)
-        except Exception:
-            log.exception("%s request failed (attempt %d/%d)",
-                          service_name, attempt, config.NOTIFY_RETRIES)
-
-        if attempt < config.NOTIFY_RETRIES:
-            delay = config.NOTIFY_RETRY_DELAY * (2 ** (attempt - 1))
-            log.info("%s retrying in %ds", service_name, delay)
-            time.sleep(delay)
-
-    log.error("%s failed after %d attempts", service_name, config.NOTIFY_RETRIES)
-    return False
-
-
-# ---------------------------------------------------------------------------
-# Startup verification — check that notification channels are reachable
-# ---------------------------------------------------------------------------
-
-def _verify_pushover() -> bool:
-    """Validate Pushover credentials via their user/validate endpoint."""
-    if not config.PUSHOVER_USER_KEY:
-        return True
-
-    url = "https://api.pushover.net/1/users/validate.json"
-    payload = {
-        "token": config.PUSHOVER_APP_TOKEN,
-        "user": config.PUSHOVER_USER_KEY,
-    }
-    data = json.dumps(payload).encode()
-
-    req = Request(url, data=data, method="POST")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "cf-access-alert/1.0")
-
-    try:
-        with urlopen(req, timeout=10) as resp:
-            body = json.loads(resp.read().decode())
-            if body.get("status") == 1:
-                log.info("Pushover      : verified ✓")
-                return True
-            log.warning("Pushover      : validation failed — %s",
-                        ", ".join(body.get("errors", ["unknown error"])))
-            return False
-    except HTTPError as exc:
-        log.warning("Pushover      : validation failed — HTTP %s "
-                    "(check PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY)", exc.code)
-        return False
-    except (URLError, OSError) as exc:
-        log.warning("Pushover      : unreachable — %s", exc)
-        return False
-
-
-def _verify_discord() -> bool:
-    """Verify Discord webhook by fetching its metadata (GET, no message sent)."""
-    if not config.DISCORD_WEBHOOK_URL:
-        return True
-
-    req = Request(config.DISCORD_WEBHOOK_URL, method="GET")
-    req.add_header("User-Agent", "cf-access-alert/1.0")
-
-    try:
-        with urlopen(req, timeout=10) as resp:
-            body = json.loads(resp.read().decode())
-            channel = body.get("name", "unknown")
-            log.info("Discord       : verified ✓ (webhook: %s)", channel)
-            return True
-    except HTTPError as exc:
-        log.warning("Discord       : verification failed — HTTP %s "
-                    "(check DISCORD_WEBHOOK_URL)", exc.code)
-        return False
-    except (URLError, OSError) as exc:
-        log.warning("Discord       : unreachable — %s", exc)
-        return False
-
-
-def _verify_ntfy() -> bool:
-    """Verify ntfy server is reachable and topic is accessible."""
-    if not config.NTFY_TOPIC:
-        return True
-
-    # Poll the topic for 0 messages — verifies server, topic, and auth
-    url = f"{config.NTFY_URL.rstrip('/')}/{config.NTFY_TOPIC}/json?poll=1&since=0"
-
-    req = Request(url, method="GET")
-    req.add_header("User-Agent", "cf-access-alert/1.0")
-    if config.NTFY_TOKEN:
-        req.add_header("Authorization", f"Bearer {config.NTFY_TOKEN}")
-
-    try:
-        with urlopen(req, timeout=10) as resp:
-            if resp.status < 300:
-                log.info("ntfy          : verified ✓ (%s)",
-                         config.NTFY_URL)
-                return True
-            log.warning("ntfy          : returned HTTP %s", resp.status)
-            return False
-    except HTTPError as exc:
-        if exc.code == 401 or exc.code == 403:
-            log.warning("ntfy          : auth failed — HTTP %s "
-                        "(check NTFY_TOKEN)", exc.code)
-        else:
-            log.warning("ntfy          : verification failed — HTTP %s", exc.code)
-        return False
-    except (URLError, OSError) as exc:
-        log.warning("ntfy          : unreachable — %s", exc)
-        return False
-
 
 def verify_channels() -> bool:
-    """
-    Verify all enabled notification channels on startup.
+    """Verify all enabled notification channels on startup.
 
     Logs results per channel. Returns True if all enabled channels
     passed, False if any failed. Does NOT block startup on failure —
     the caller decides what to do.
     """
-    results = []
-    results.append(_verify_pushover())
-    results.append(_verify_discord())
-    results.append(_verify_ntfy())
+    enabled = [ch for ch in ALL_CHANNELS if ch.is_enabled()]
+    results = [ch.verify() for ch in enabled]
 
     if all(results):
         log.info("All notification channels verified")
@@ -223,114 +38,6 @@ def verify_channels() -> bool:
         log.warning("One or more notification channels failed verification — "
                     "alerts may not be delivered")
     return all(results)
-
-
-# ---------------------------------------------------------------------------
-# Pushover
-# ---------------------------------------------------------------------------
-
-def send_pushover(event: dict, shutdown=None) -> bool:
-    """Send a Pushover notification. Returns True on success."""
-    if not config.PUSHOVER_USER_KEY:
-        return True
-
-    app_name = event.get("app_name", event.get("app_domain", "unknown"))
-    email = event.get("user_email", "unknown")
-    ip = event.get("ip_address", "unknown")
-    country = event.get("country", "unknown").upper()
-    connection = event.get("connection", "unknown")
-    created = format_event_time(event.get("created_at", ""))
-
-    payload = {
-        "token": config.PUSHOVER_APP_TOKEN,
-        "user": config.PUSHOVER_USER_KEY,
-        "title": f"CF Access blocked: {app_name}",
-        "message": (
-            f"App: {app_name}\n"
-            f"Email: {email}\n"
-            f"IP: {ip}\n"
-            f"Country: {country}\n"
-            f"IdP: {connection}\n"
-            f"Time: {created}"
-        ),
-        "priority": str(config.PUSHOVER_PRIORITY),
-        "sound": config.PUSHOVER_SOUND,
-    }
-    return _post_json(
-        "https://api.pushover.net/1/messages.json", payload, "Pushover", shutdown
-    )
-
-
-# ---------------------------------------------------------------------------
-# Discord
-# ---------------------------------------------------------------------------
-
-def send_discord(event: dict, shutdown=None) -> bool:
-    """Send a Discord webhook notification. Returns True on success."""
-    if not config.DISCORD_WEBHOOK_URL:
-        return True
-
-    app_name = event.get("app_name", event.get("app_domain", "unknown"))
-    email = event.get("user_email", "unknown")
-    ip = event.get("ip_address", "unknown")
-    country = event.get("country", "unknown").upper()
-    connection = event.get("connection", "unknown")
-    created = format_event_time(event.get("created_at", ""))
-    allowed = event.get("allowed", False)
-
-    color = 0xFF0000 if not allowed else 0xFFA500
-
-    payload = {
-        "username": "CF Access Alert",
-        "embeds": [
-            {
-                "title": f"Blocked login — {app_name}",
-                "color": color,
-                "fields": [
-                    {"name": "Application", "value": app_name, "inline": True},
-                    {"name": "Email", "value": email, "inline": True},
-                    {"name": "IP Address", "value": ip, "inline": True},
-                    {"name": "Country", "value": country, "inline": True},
-                    {"name": "Identity Provider", "value": connection, "inline": True},
-                    {"name": "Time", "value": created, "inline": False},
-                ],
-            }
-        ],
-    }
-    return _post_json(config.DISCORD_WEBHOOK_URL, payload, "Discord", shutdown)
-
-
-# ---------------------------------------------------------------------------
-# ntfy
-# ---------------------------------------------------------------------------
-
-def send_ntfy(event: dict, shutdown=None) -> bool:
-    """Send an ntfy notification. Returns True on success."""
-    if not config.NTFY_TOPIC:
-        return True
-
-    app_name = event.get("app_name", event.get("app_domain", "unknown"))
-    email = event.get("user_email", "unknown")
-    ip = event.get("ip_address", "unknown")
-    country = event.get("country", "unknown").upper()
-    connection = event.get("connection", "unknown")
-    created = format_event_time(event.get("created_at", ""))
-
-    payload = {
-        "topic": config.NTFY_TOPIC,
-        "title": f"CF Access blocked: {app_name}",
-        "message": (
-            f"App: {app_name}\n"
-            f"Email: {email}\n"
-            f"IP: {ip}\n"
-            f"Country: {country}\n"
-            f"IdP: {connection}\n"
-            f"Time: {created}"
-        ),
-        "tags": ["rotating_light", "lock"],
-        "priority": config.NTFY_PRIORITY,
-    }
-    return _ntfy_post(payload, "event", shutdown)
 
 
 # ---------------------------------------------------------------------------
@@ -357,83 +64,13 @@ def notify(event: dict, shutdown=None) -> bool:
         app_name, email, ip, country, connection, created
     )
 
-    pushover_ok = send_pushover(event, shutdown)
-    discord_ok = send_discord(event, shutdown)
-    ntfy_ok = send_ntfy(event, shutdown)
-    return pushover_ok and discord_ok and ntfy_ok
+    results = [ch.send_event(event, shutdown) for ch in get_active_channels()]
+    return all(results)
 
 
 # ---------------------------------------------------------------------------
 # Unified notify — burst summary
 # ---------------------------------------------------------------------------
-
-def _notify_burst_pushover(burst: dict, shutdown=None) -> bool:
-    """Send a burst summary via Pushover."""
-    if not config.PUSHOVER_USER_KEY:
-        return True
-
-    payload = {
-        "token": config.PUSHOVER_APP_TOKEN,
-        "user": config.PUSHOVER_USER_KEY,
-        "title": f"⚠ Brute-force: {burst['ip_address']}",
-        "message": (
-            f"IP: {burst['ip_address']}\n"
-            f"Blocked attempts: {burst['count']} in {format_duration(burst['window_seconds'])}\n"
-            f"Emails: {', '.join(burst['emails'])}\n"
-            f"Apps: {', '.join(burst['apps'])}\n"
-            f"Countries: {', '.join(burst['countries'])}"
-        ),
-        "priority": "1",
-        "sound": config.PUSHOVER_SOUND,
-    }
-    return _post_json(
-        "https://api.pushover.net/1/messages.json", payload, "Pushover", shutdown
-    )
-
-
-def _notify_burst_discord(burst: dict, shutdown=None) -> bool:
-    """Send a burst summary via Discord."""
-    if not config.DISCORD_WEBHOOK_URL:
-        return True
-
-    payload = {
-        "username": "CF Access Alert",
-        "embeds": [
-            {
-                "title": f"⚠ Brute-force detected — {burst['ip_address']}",
-                "color": 0xFF0000,
-                "fields": [
-                    {"name": "IP Address", "value": burst["ip_address"], "inline": True},
-                    {"name": "Blocked Attempts",
-                     "value": f"{burst['count']} in {format_duration(burst['window_seconds'])}",
-                     "inline": True},
-                    {"name": "Emails", "value": ", ".join(burst["emails"]), "inline": False},
-                    {"name": "Applications", "value": ", ".join(burst["apps"]), "inline": False},
-                    {"name": "Countries", "value": ", ".join(burst["countries"]), "inline": True},
-                ],
-            }
-        ],
-    }
-    return _post_json(config.DISCORD_WEBHOOK_URL, payload, "Discord", shutdown)
-
-
-def _notify_burst_ntfy(burst: dict, shutdown=None) -> bool:
-    """Send a burst summary via ntfy."""
-    payload = {
-        "topic": config.NTFY_TOPIC,
-        "title": f"⚠ Brute-force: {burst['ip_address']}",
-        "message": (
-            f"IP: {burst['ip_address']}\n"
-            f"Blocked attempts: {burst['count']} in {format_duration(burst['window_seconds'])}\n"
-            f"Emails: {', '.join(burst['emails'])}\n"
-            f"Apps: {', '.join(burst['apps'])}\n"
-            f"Countries: {', '.join(burst['countries'])}"
-        ),
-        "tags": ["skull", "warning"],
-        "priority": 5,
-    }
-    return _ntfy_post(payload, "burst", shutdown)
-
 
 def notify_burst(burst: dict, shutdown=None) -> bool:
     """Send a burst summary alert to all configured channels."""
@@ -451,103 +88,13 @@ def notify_burst(burst: dict, shutdown=None) -> bool:
         ", ".join(burst["countries"]),
     )
 
-    pushover_ok = _notify_burst_pushover(burst, shutdown)
-    discord_ok = _notify_burst_discord(burst, shutdown)
-    ntfy_ok = _notify_burst_ntfy(burst, shutdown)
-    return pushover_ok and discord_ok and ntfy_ok
+    results = [ch.send_burst(burst, shutdown) for ch in get_active_channels()]
+    return all(results)
 
 
 # ---------------------------------------------------------------------------
 # Unified notify — daily digest
 # ---------------------------------------------------------------------------
-
-def _format_top_list(items: list[tuple[str, int]], label: str) -> str:
-    """Format a list of (name, count) tuples into a readable string."""
-    if not items:
-        return f"  {label}: (none)"
-    lines = [f"  {label}:"]
-    for name, count in items:
-        lines.append(f"    {name}: {count}")
-    return "\n".join(lines)
-
-
-def _digest_message(digest: dict) -> str:
-    """Build the plain-text digest message body."""
-    lines = [
-        f"Daily summary:",
-        f"  Total blocked: {digest['total_blocked']}",
-        f"  Burst alerts: {digest['total_bursts']}",
-        f"  Unique IPs: {digest['unique_ips']}",
-        f"  Unique emails: {digest['unique_emails']}",
-        "",
-        _format_top_list(digest["top_ips"], "Top IPs"),
-        _format_top_list(digest["top_emails"], "Top emails"),
-        _format_top_list(digest["top_apps"], "Top apps"),
-        _format_top_list(digest["top_countries"], "Top countries"),
-    ]
-    return "\n".join(lines)
-
-
-def _notify_digest_pushover(digest: dict, shutdown=None) -> bool:
-    """Send digest via Pushover."""
-    if not config.PUSHOVER_USER_KEY:
-        return True
-
-    payload = {
-        "token": config.PUSHOVER_APP_TOKEN,
-        "user": config.PUSHOVER_USER_KEY,
-        "title": f"📊 CF Access daily digest",
-        "message": _digest_message(digest),
-        "priority": "-1",
-        "sound": config.PUSHOVER_SOUND,
-    }
-    return _post_json(
-        "https://api.pushover.net/1/messages.json", payload, "Pushover", shutdown
-    )
-
-
-def _notify_digest_discord(digest: dict, shutdown=None) -> bool:
-    """Send digest via Discord."""
-    if not config.DISCORD_WEBHOOK_URL:
-        return True
-
-    def _top_field(items: list[tuple[str, int]]) -> str:
-        if not items:
-            return "(none)"
-        return "\n".join(f"`{name}`: {count}" for name, count in items)
-
-    payload = {
-        "username": "CF Access Alert",
-        "embeds": [
-            {
-                "title": "📊 Daily digest",
-                "color": 0x3498DB,
-                "fields": [
-                    {"name": "Total Blocked", "value": str(digest["total_blocked"]), "inline": True},
-                    {"name": "Burst Alerts", "value": str(digest["total_bursts"]), "inline": True},
-                    {"name": "Unique IPs", "value": str(digest["unique_ips"]), "inline": True},
-                    {"name": "Top IPs", "value": _top_field(digest["top_ips"]), "inline": False},
-                    {"name": "Top Emails", "value": _top_field(digest["top_emails"]), "inline": False},
-                    {"name": "Top Apps", "value": _top_field(digest["top_apps"]), "inline": True},
-                    {"name": "Top Countries", "value": _top_field(digest["top_countries"]), "inline": True},
-                ],
-            }
-        ],
-    }
-    return _post_json(config.DISCORD_WEBHOOK_URL, payload, "Discord", shutdown)
-
-
-def _notify_digest_ntfy(digest: dict, shutdown=None) -> bool:
-    """Send digest via ntfy."""
-    payload = {
-        "topic": config.NTFY_TOPIC,
-        "title": "📊 CF Access daily digest",
-        "message": _digest_message(digest),
-        "tags": ["bar_chart"],
-        "priority": 3,
-    }
-    return _ntfy_post(payload, "digest", shutdown)
-
 
 def notify_digest(digest: dict, shutdown=None) -> bool:
     """Send daily digest to all configured channels. Returns True if all succeeded."""
@@ -560,7 +107,5 @@ def notify_digest(digest: dict, shutdown=None) -> bool:
             digest["unique_ips"],
         )
 
-    pushover_ok = _notify_digest_pushover(digest, shutdown)
-    discord_ok = _notify_digest_discord(digest, shutdown)
-    ntfy_ok = _notify_digest_ntfy(digest, shutdown)
-    return pushover_ok and discord_ok and ntfy_ok
+    results = [ch.send_digest(digest, shutdown) for ch in get_active_channels()]
+    return all(results)

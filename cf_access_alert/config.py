@@ -56,19 +56,8 @@ CF_APP_UIDS: set = set(
 CF_PAGE_SIZE: int = 100
 
 # ---------------------------------------------------------------------------
-# Notifications
+# Notifications — channel-specific config lives in channels/*.py
 # ---------------------------------------------------------------------------
-PUSHOVER_USER_KEY: str = os.environ.get("PUSHOVER_USER_KEY", "")
-PUSHOVER_APP_TOKEN: str = os.environ.get("PUSHOVER_APP_TOKEN", "")
-PUSHOVER_PRIORITY: str = os.environ.get("PUSHOVER_PRIORITY", "0")
-PUSHOVER_SOUND: str = os.environ.get("PUSHOVER_SOUND", "pushover")
-DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
-
-# ntfy — self-hosted or ntfy.sh
-NTFY_URL: str = os.environ.get("NTFY_URL", "https://ntfy.sh")
-NTFY_TOPIC: str = os.environ.get("NTFY_TOPIC", "")
-NTFY_TOKEN: str = os.environ.get("NTFY_TOKEN", "")
-NTFY_PRIORITY: int = int(os.environ.get("NTFY_PRIORITY", "4"))  # 1-5, 4=high
 
 # ---------------------------------------------------------------------------
 # Burst detection
@@ -151,26 +140,30 @@ def redact_payload(payload: dict, service_name: str) -> dict:
 
 def validate() -> None:
     """Validate required config and log startup summary."""
+    from .channels import ALL_CHANNELS
+
     missing = []
     if not CF_API_TOKEN:
         missing.append("CF_API_TOKEN")
     if not CF_ACCOUNT_ID:
         missing.append("CF_ACCOUNT_ID")
-    if not PUSHOVER_USER_KEY and not DISCORD_WEBHOOK_URL and not NTFY_TOPIC:
-        missing.append("PUSHOVER_USER_KEY, DISCORD_WEBHOOK_URL, or NTFY_TOPIC (need at least one)")
-    if PUSHOVER_USER_KEY and not PUSHOVER_APP_TOKEN:
-        missing.append("PUSHOVER_APP_TOKEN (required when PUSHOVER_USER_KEY is set)")
+
+    active = [ch for ch in ALL_CHANNELS if ch.is_enabled()]
+    if not active:
+        names = ", ".join(ch.name for ch in ALL_CHANNELS)
+        missing.append(f"At least one notification channel must be configured ({names})")
+
     if missing:
-        log.error("Missing required environment variables: %s", ", ".join(missing))
+        log.error("Missing required configuration: %s", ", ".join(missing))
         sys.exit(1)
 
     log.info("Log level      : %s", LOG_LEVEL)
     log.info("CF_ACCOUNT_ID  : %s", redact(CF_ACCOUNT_ID))
     log.info("CF_APP_UIDS    : %s",
              ", ".join(sorted(CF_APP_UIDS)) if CF_APP_UIDS else "(all apps)")
-    log.info("Pushover       : %s", "enabled" if PUSHOVER_USER_KEY else "disabled")
-    log.info("Discord        : %s", "enabled" if DISCORD_WEBHOOK_URL else "disabled")
-    log.info("ntfy           : %s", f"enabled ({NTFY_URL})" if NTFY_TOPIC else "disabled")
+    for ch in ALL_CHANNELS:
+        status = "enabled" if ch.is_enabled() else "disabled"
+        log.info("%-15s: %s", ch.name, status)
     log.info("Burst detect   : threshold=%d in %s window",
              BURST_THRESHOLD, format_duration(BURST_WINDOW))
     log.info("Daily digest   : %s (at %02d:%02d local)",
