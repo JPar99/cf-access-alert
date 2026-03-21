@@ -26,7 +26,7 @@ class PushoverChannel(NotificationChannel):
         self.sound = os.environ.get("PUSHOVER_SOUND", "pushover")
 
     def is_enabled(self) -> bool:
-        return bool(self.user_key)
+        return bool(self.user_key and self.app_token)
 
     def verify(self) -> bool:
         if not self.is_enabled():
