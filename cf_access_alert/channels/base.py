@@ -90,9 +90,13 @@ class NotificationChannel:
                               self.name, attempt, config.NOTIFY_RETRIES)
 
             if attempt < config.NOTIFY_RETRIES:
-                delay = config.NOTIFY_RETRY_DELAY * (2 ** (attempt - 1))
+                delay = min(config.NOTIFY_RETRY_DELAY * (2 ** (attempt - 1)), 60)
                 log.info("%s retrying in %ds", self.name, delay)
-                time.sleep(delay)
+                for _ in range(delay):
+                    if shutdown and shutdown.should_exit:
+                        log.info("%s retry aborted — shutting down", self.name)
+                        return False
+                    time.sleep(1)
 
         log.error("%s failed after %d attempts", self.name, config.NOTIFY_RETRIES)
         return False
