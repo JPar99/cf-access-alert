@@ -6,7 +6,7 @@ import os
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
-from .base import NotificationChannel
+from .base import NotificationChannel, USER_AGENT
 from ..config import format_duration
 from ..timeutil import format_event_time
 
@@ -27,7 +27,7 @@ class DiscordChannel(NotificationChannel):
             return True
 
         req = Request(self.webhook_url, method="GET")
-        req.add_header("User-Agent", "cf-access-alert/1.0")
+        req.add_header("User-Agent", USER_AGENT)
 
         try:
             with urlopen(req, timeout=10) as resp:

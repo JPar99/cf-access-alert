@@ -7,9 +7,12 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
 from .. import config
+from ..banner import VERSION
 from ..config import redact_url, redact_payload
 
 log = logging.getLogger("cf-access-alert")
+
+USER_AGENT = f"cf-access-alert/{VERSION}"
 
 
 class NotificationChannel:
@@ -71,7 +74,7 @@ class NotificationChannel:
 
             req = Request(url, data=data, method="POST")
             req.add_header("Content-Type", "application/json")
-            req.add_header("User-Agent", "cf-access-alert/1.0")
+            req.add_header("User-Agent", USER_AGENT)
             if extra_headers:
                 for key, value in extra_headers.items():
                     req.add_header(key, value)

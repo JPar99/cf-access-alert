@@ -6,9 +6,12 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from . import config
+from .banner import VERSION
 from .config import redact_url
 
 log = logging.getLogger("cf-access-alert")
+
+USER_AGENT = f"cf-access-alert/{VERSION}"
 
 
 def _fetch_page(since: str, until: str, page: int) -> dict | None:
@@ -28,7 +31,7 @@ def _fetch_page(since: str, until: str, page: int) -> dict | None:
     req = Request(url, method="GET")
     req.add_header("Authorization", f"Bearer {config.CF_API_TOKEN}")
     req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "cf-access-alert/1.0")
+    req.add_header("User-Agent", USER_AGENT)
 
     try:
         with urlopen(req, timeout=30) as resp:

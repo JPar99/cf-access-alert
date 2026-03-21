@@ -3,7 +3,7 @@
 import logging
 import os
 
-from .base import NotificationChannel
+from .base import NotificationChannel, USER_AGENT
 from ..config import format_duration
 from ..timeutil import format_event_time
 
@@ -40,7 +40,7 @@ class NtfyChannel(NotificationChannel):
         url = f"{self._post_url()}/{self.topic}/json?poll=1&since=0"
 
         req = Request(url, method="GET")
-        req.add_header("User-Agent", "cf-access-alert/1.0")
+        req.add_header("User-Agent", USER_AGENT)
         if self.token:
             req.add_header("Authorization", f"Bearer {self.token}")
 

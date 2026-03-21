@@ -32,7 +32,7 @@ def check_for_updates() -> None:
     log.debug("Checking for updates at %s", GITHUB_API_URL)
 
     req = Request(GITHUB_API_URL, method="GET")
-    req.add_header("User-Agent", "cf-access-alert/update-check")
+    req.add_header("User-Agent", f"cf-access-alert/{VERSION}")
     req.add_header("Accept", "application/vnd.github.v3+json")
 
     try:
