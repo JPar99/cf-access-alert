@@ -40,7 +40,8 @@ def main() -> None:
     check_for_updates()
 
     state = load()
-    alerted_ids = state["alerted_ids"]
+    alerted_ids = state["alerted_ids"]      # ordered list (for trimming)
+    alerted_set = state["alerted_set"]      # set (for O(1) lookups)
     last_poll = state["last_poll"]
     next_digest_at = state.get("next_digest_at")
 
@@ -109,7 +110,7 @@ def main() -> None:
         blocked = filter_events(events)
 
         new_blocked = [
-            ev for ev in blocked if ev.get("ray_id") not in alerted_ids
+            ev for ev in blocked if ev.get("ray_id") not in alerted_set
         ]
 
         if new_blocked:
@@ -124,7 +125,9 @@ def main() -> None:
             # Send individual alerts and feed digest
             for ev in individual:
                 notify(ev, shutdown)
-                alerted_ids.add(ev.get("ray_id"))
+                ray_id = ev.get("ray_id")
+                alerted_ids.append(ray_id)
+                alerted_set.add(ray_id)
                 digest.record_event(ev)
 
             # Send burst summaries and feed digest
@@ -134,7 +137,10 @@ def main() -> None:
 
             # Mark all new events as alerted (burst or not)
             for ev in new_blocked:
-                alerted_ids.add(ev.get("ray_id"))
+                ray_id = ev.get("ray_id")
+                if ray_id not in alerted_set:
+                    alerted_ids.append(ray_id)
+                    alerted_set.add(ray_id)
         else:
             if blocked:
                 log.debug("Found %d blocked event(s) but all already alerted",

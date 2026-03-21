@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Compile check (syntax errors)
+        run: python -m py_compile run.py && python -m compileall cf_access_alert/
+
+      - name: Import check (module resolution)
+        run: python -c "from cf_access_alert import main, config, cloudflare, notifications, burst, digest, state, shutdown, timeutil, updater, healthcheck, banner"

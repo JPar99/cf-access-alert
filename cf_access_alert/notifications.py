@@ -449,8 +449,3 @@ def notify_digest(digest: dict, shutdown=None) -> bool:
     discord_ok = _notify_digest_discord(digest, shutdown)
     ntfy_ok = _notify_digest_ntfy(digest, shutdown)
     return pushover_ok and discord_ok and ntfy_ok
-
-    pushover_ok = _notify_digest_pushover(digest, shutdown)
-    discord_ok = _notify_digest_discord(digest, shutdown)
-    ntfy_ok = _notify_digest_ntfy(digest, shutdown)
-    return pushover_ok and discord_ok and ntfy_ok

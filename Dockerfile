@@ -1,4 +1,4 @@
-FROM python:3.14-alpine
+FROM python:3.13-alpine
 
 # tzdata needed for TZ env var to work in Alpine
 RUN apk add --no-cache tzdata

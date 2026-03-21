@@ -31,6 +31,12 @@ class BurstTracker:
         if not self._hits[ip]:
             del self._hits[ip]
 
+    def _prune_all(self, now: datetime) -> None:
+        """Prune all tracked IPs to prevent memory leaks from stale entries."""
+        stale = [ip for ip in self._hits]
+        for ip in stale:
+            self._prune(ip, now)
+
     def record(self, event: dict) -> None:
         """Record a blocked event hit for its IP."""
         ip = event.get("ip_address", "unknown")
@@ -56,6 +62,9 @@ class BurstTracker:
             window_seconds, first_seen, last_seen.
         """
         now = datetime.now(timezone.utc)
+
+        # Prune all tracked IPs first to free stale entries
+        self._prune_all(now)
 
         # Record all events first
         for ev in events:

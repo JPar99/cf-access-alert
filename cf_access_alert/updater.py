@@ -24,6 +24,11 @@ def _parse_version(version_str: str) -> tuple:
 
 def check_for_updates() -> None:
     """Check GitHub for a newer release and log a message if one is found."""
+    from . import config
+    if not config.UPDATE_CHECK:
+        log.debug("Update check disabled via UPDATE_CHECK=false")
+        return
+
     log.debug("Checking for updates at %s", GITHUB_API_URL)
 
     req = Request(GITHUB_API_URL, method="GET")
@@ -79,8 +84,7 @@ def _format_age(published_at: str) -> str:
     try:
         # GitHub format: 2026-03-20T16:35:05Z
         pub_dt = datetime.strptime(
-            published_at.replace("Z", "+00:00").split("+")[0],
-            "%Y-%m-%dT%H:%M:%S"
+            published_at, "%Y-%m-%dT%H:%M:%SZ"
         ).replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         delta = now - pub_dt

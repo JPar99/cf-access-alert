@@ -108,6 +108,11 @@ MAX_CATCHUP: int = parse_duration(os.environ.get("MAX_CATCHUP", "7d"), 604800)
 # ---------------------------------------------------------------------------
 LOG_LEVEL: str = os.environ.get("LOG_LEVEL", "INFO").upper()
 
+# ---------------------------------------------------------------------------
+# Update checker
+# ---------------------------------------------------------------------------
+UPDATE_CHECK: bool = os.environ.get("UPDATE_CHECK", "true").lower() in ("true", "1", "yes")
+
 
 # ---------------------------------------------------------------------------
 # Redaction helpers

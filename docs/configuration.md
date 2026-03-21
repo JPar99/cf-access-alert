@@ -71,6 +71,7 @@ At least one notification channel must be configured:
 |---|---|---|
 | `TZ` | `Europe/Amsterdam` | Timezone for logs and notifications |
 | `LOG_LEVEL` | `INFO` | Log level: `INFO` or `DEBUG` |
+| `UPDATE_CHECK` | `true` | Check GitHub for new releases on startup |
 
 Duration values support: `30s`, `10m`, `2h`, `7d`. Plain numbers are treated as seconds.
 
