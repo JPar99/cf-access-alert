@@ -33,14 +33,14 @@ class DiscordChannel(NotificationChannel):
             with urlopen(req, timeout=10) as resp:
                 body = json.loads(resp.read().decode())
                 channel = body.get("name", "unknown")
-                log.info("Discord       : verified ✓ (webhook: %s)", channel)
+                log.info("%-15s: verified ✓ (webhook: %s)", self.name, channel)
                 return True
         except HTTPError as exc:
-            log.warning("Discord       : verification failed — HTTP %s "
-                        "(check DISCORD_WEBHOOK_URL)", exc.code)
+            log.warning("%-15s: verification failed — HTTP %s "
+                        "(check DISCORD_WEBHOOK_URL)", self.name, exc.code)
             return False
         except (URLError, OSError) as exc:
-            log.warning("Discord       : unreachable — %s", exc)
+            log.warning("%-15s: unreachable — %s", self.name, exc)
             return False
 
     def send_event(self, event: dict, shutdown=None) -> bool:

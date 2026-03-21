@@ -161,9 +161,6 @@ def validate() -> None:
     log.info("CF_ACCOUNT_ID  : %s", redact(CF_ACCOUNT_ID))
     log.info("CF_APP_UIDS    : %s",
              ", ".join(sorted(CF_APP_UIDS)) if CF_APP_UIDS else "(all apps)")
-    for ch in ALL_CHANNELS:
-        status = "enabled" if ch.is_enabled() else "disabled"
-        log.info("%-15s: %s", ch.name, status)
     log.info("Burst detect   : threshold=%d in %s window",
              BURST_THRESHOLD, format_duration(BURST_WINDOW))
     log.info("Daily digest   : %s (at %02d:%02d local)",

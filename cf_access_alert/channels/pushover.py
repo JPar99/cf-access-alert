@@ -43,17 +43,18 @@ class PushoverChannel(NotificationChannel):
             with urlopen(req, timeout=10) as resp:
                 body = json.loads(resp.read().decode())
                 if body.get("status") == 1:
-                    log.info("Pushover      : verified ✓")
+                    log.info("%-15s: verified ✓", self.name)
                     return True
-                log.warning("Pushover      : validation failed — %s",
-                            ", ".join(body.get("errors", ["unknown error"])))
+                log.warning("%-15s: validation failed — %s",
+                            self.name, ", ".join(body.get("errors", ["unknown error"])))
                 return False
         except HTTPError as exc:
-            log.warning("Pushover      : validation failed — HTTP %s "
-                        "(check PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY)", exc.code)
+            log.warning("%-15s: validation failed — HTTP %s "
+                        "(check PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY)",
+                        self.name, exc.code)
             return False
         except (URLError, OSError) as exc:
-            log.warning("Pushover      : unreachable — %s", exc)
+            log.warning("%-15s: unreachable — %s", self.name, exc)
             return False
 
     def send_event(self, event: dict, shutdown=None) -> bool:

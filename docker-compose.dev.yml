@@ -1,0 +1,11 @@
+# Development override — build locally instead of pulling from GHCR
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+services:
+  cf-access-alert:
+    image: cf-access-alert:dev
+    build: .
+    volumes:
+      - cf-access-alert-data-dev:/data
+
+volumes:
+  cf-access-alert-data-dev:

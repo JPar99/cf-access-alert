@@ -36,10 +36,11 @@ log = logging.getLogger("cf-access-alert")
 def main() -> None:
     print_banner()
     shutdown = GracefulShutdown()
-    config.validate()
-    check_for_updates()
-    verify_channels()
 
+    # --- Configuration ---
+    config.validate()
+
+    # --- State ---
     state = load()
     alerted_ids = state["alerted_ids"]      # ordered list (for trimming)
     alerted_set = state["alerted_set"]      # set (for O(1) lookups)
@@ -48,7 +49,7 @@ def main() -> None:
 
     log.info("Loaded %d previously alerted ray_id(s)", len(alerted_ids))
     if last_poll:
-        log.info("Last successful poll: %s", utc_to_local(last_poll))
+        log.info("Last poll      : %s", utc_to_local(last_poll))
 
     burst_tracker = BurstTracker()
     digest = DigestAccumulator()
@@ -59,7 +60,13 @@ def main() -> None:
         local_now = now.astimezone()
         next_dt = compute_next_digest(local_now)
         next_digest_at = next_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        log.info("Digest scheduled: next at %s", utc_to_local(next_digest_at))
+        log.info("Next digest    : %s", utc_to_local(next_digest_at))
+
+    # --- Channels (verify after config + state so all info is grouped) ---
+    verify_channels()
+
+    # --- Update check (last — nice-to-have, may be slow) ---
+    check_for_updates()
 
     first_run = True
 

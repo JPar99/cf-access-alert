@@ -25,19 +25,22 @@ log = logging.getLogger("cf-access-alert")
 def verify_channels() -> bool:
     """Verify all enabled notification channels on startup.
 
-    Logs results per channel. Returns True if all enabled channels
-    passed, False if any failed. Does NOT block startup on failure —
-    the caller decides what to do.
+    Logs status for every channel (disabled or verified/failed).
+    Returns True if all enabled channels passed, False if any failed.
+    Does NOT block startup on failure — the caller decides what to do.
     """
-    enabled = [ch for ch in ALL_CHANNELS if ch.is_enabled()]
-    results = [ch.verify() for ch in enabled]
+    all_ok = True
+    for ch in ALL_CHANNELS:
+        if not ch.is_enabled():
+            log.info("%-15s: disabled", ch.name)
+            continue
+        if not ch.verify():
+            all_ok = False
 
-    if all(results):
-        log.info("All notification channels verified")
-    else:
+    if not all_ok:
         log.warning("One or more notification channels failed verification — "
                     "alerts may not be delivered")
-    return all(results)
+    return all_ok
 
 
 # ---------------------------------------------------------------------------

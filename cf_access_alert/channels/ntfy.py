@@ -47,19 +47,19 @@ class NtfyChannel(NotificationChannel):
         try:
             with urlopen(req, timeout=10) as resp:
                 if resp.status < 300:
-                    log.info("ntfy          : verified ✓ (%s)", self.url)
+                    log.info("%-15s: verified ✓ (%s)", self.name, self.url)
                     return True
-                log.warning("ntfy          : returned HTTP %s", resp.status)
+                log.warning("%-15s: returned HTTP %s", self.name, resp.status)
                 return False
         except HTTPError as exc:
             if exc.code == 401 or exc.code == 403:
-                log.warning("ntfy          : auth failed — HTTP %s "
-                            "(check NTFY_TOKEN)", exc.code)
+                log.warning("%-15s: auth failed — HTTP %s "
+                            "(check NTFY_TOKEN)", self.name, exc.code)
             else:
-                log.warning("ntfy          : verification failed — HTTP %s", exc.code)
+                log.warning("%-15s: verification failed — HTTP %s", self.name, exc.code)
             return False
         except (URLError, OSError) as exc:
-            log.warning("ntfy          : unreachable — %s", exc)
+            log.warning("%-15s: unreachable — %s", self.name, exc)
             return False
 
     def send_event(self, event: dict, shutdown=None) -> bool:
