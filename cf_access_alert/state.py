@@ -55,6 +55,7 @@ def save(alerted_ids: list, last_poll: str, next_digest_at: str = None) -> None:
     # Atomic write: write to temp file then rename (rename is atomic on Linux)
     tmp_path = state_path.with_suffix(".tmp")
     tmp_path.write_text(json.dumps(state))
+    tmp_path.chmod(0o600)
     os.replace(str(tmp_path), str(state_path))
 
     log.debug("State saved: %d ray_ids, last_poll=%s, next_digest=%s",

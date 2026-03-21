@@ -2,5 +2,10 @@
 .env.example
 .git
 .gitignore
+.github
 README.md
+LICENSE
+Makefile
+docs/
 docker-compose.yml
+docker-compose.dev.yml
