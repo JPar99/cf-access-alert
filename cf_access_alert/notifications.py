@@ -1,4 +1,4 @@
-"""Notification senders — Discord, Pushover, with retry and exponential backoff."""
+"""Notification senders — Discord, Pushover, ntfy, with retry and exponential backoff."""
 
 import json
 import logging
@@ -135,6 +135,85 @@ def send_discord(event: dict, shutdown=None) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# ntfy
+# ---------------------------------------------------------------------------
+
+def send_ntfy(event: dict, shutdown=None) -> bool:
+    """Send an ntfy notification. Returns True on success."""
+    if not config.NTFY_TOPIC:
+        return True
+
+    app_name = event.get("app_name", event.get("app_domain", "unknown"))
+    email = event.get("user_email", "unknown")
+    ip = event.get("ip_address", "unknown")
+    country = event.get("country", "unknown").upper()
+    connection = event.get("connection", "unknown")
+    created = format_event_time(event.get("created_at", ""))
+
+    payload = {
+        "topic": config.NTFY_TOPIC,
+        "title": f"CF Access blocked: {app_name}",
+        "message": (
+            f"App: {app_name}\n"
+            f"Email: {email}\n"
+            f"IP: {ip}\n"
+            f"Country: {country}\n"
+            f"IdP: {connection}\n"
+            f"Time: {created}"
+        ),
+        "tags": ["rotating_light", "lock"],
+        "priority": config.NTFY_PRIORITY,
+    }
+
+    url = config.NTFY_URL.rstrip("/")
+
+    # Add basic auth header if credentials are configured
+    headers = {}
+    if config.NTFY_TOKEN:
+        headers["Authorization"] = f"Bearer {config.NTFY_TOKEN}"
+
+    data = json.dumps(payload).encode()
+
+    for attempt in range(1, config.NOTIFY_RETRIES + 1):
+        if shutdown and shutdown.should_exit:
+            log.info("ntfy skipped — shutting down")
+            return False
+
+        log.debug("ntfy POST to: %s (attempt %d/%d)",
+                  redact_url(url), attempt, config.NOTIFY_RETRIES)
+        if attempt == 1:
+            safe = dict(payload)
+            log.debug("ntfy payload: %s", json.dumps(safe))
+
+        req = Request(url, data=data, method="POST")
+        req.add_header("Content-Type", "application/json")
+        req.add_header("User-Agent", "cf-access-alert/1.0")
+        for k, v in headers.items():
+            req.add_header(k, v)
+
+        try:
+            with urlopen(req, timeout=15) as resp:
+                if resp.status < 300:
+                    log.info("ntfy success: HTTP %s", resp.status)
+                    return True
+                log.warning("ntfy returned HTTP %s", resp.status)
+        except HTTPError as exc:
+            log.warning("ntfy HTTP error %s (attempt %d/%d)",
+                        exc.code, attempt, config.NOTIFY_RETRIES)
+        except Exception:
+            log.exception("ntfy request failed (attempt %d/%d)",
+                          attempt, config.NOTIFY_RETRIES)
+
+        if attempt < config.NOTIFY_RETRIES:
+            delay = config.NOTIFY_RETRY_DELAY * (2 ** (attempt - 1))
+            log.info("ntfy retrying in %ds", delay)
+            time.sleep(delay)
+
+    log.error("ntfy failed after %d attempts", config.NOTIFY_RETRIES)
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Unified notify
 # ---------------------------------------------------------------------------
 
@@ -160,4 +239,5 @@ def notify(event: dict, shutdown=None) -> bool:
 
     pushover_ok = send_pushover(event, shutdown)
     discord_ok = send_discord(event, shutdown)
-    return pushover_ok and discord_ok
+    ntfy_ok = send_ntfy(event, shutdown)
+    return pushover_ok and discord_ok and ntfy_ok

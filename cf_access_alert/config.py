@@ -64,6 +64,12 @@ PUSHOVER_PRIORITY: str = os.environ.get("PUSHOVER_PRIORITY", "0")
 PUSHOVER_SOUND: str = os.environ.get("PUSHOVER_SOUND", "pushover")
 DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
+# ntfy — self-hosted or ntfy.sh
+NTFY_URL: str = os.environ.get("NTFY_URL", "https://ntfy.sh")
+NTFY_TOPIC: str = os.environ.get("NTFY_TOPIC", "")
+NTFY_TOKEN: str = os.environ.get("NTFY_TOKEN", "")
+NTFY_PRIORITY: int = int(os.environ.get("NTFY_PRIORITY", "4"))  # 1-5, 4=high
+
 # ---------------------------------------------------------------------------
 # Retry
 # ---------------------------------------------------------------------------
@@ -126,8 +132,8 @@ def validate() -> None:
         missing.append("CF_API_TOKEN")
     if not CF_ACCOUNT_ID:
         missing.append("CF_ACCOUNT_ID")
-    if not PUSHOVER_USER_KEY and not DISCORD_WEBHOOK_URL:
-        missing.append("PUSHOVER_USER_KEY or DISCORD_WEBHOOK_URL (need at least one)")
+    if not PUSHOVER_USER_KEY and not DISCORD_WEBHOOK_URL and not NTFY_TOPIC:
+        missing.append("PUSHOVER_USER_KEY, DISCORD_WEBHOOK_URL, or NTFY_TOPIC (need at least one)")
     if PUSHOVER_USER_KEY and not PUSHOVER_APP_TOKEN:
         missing.append("PUSHOVER_APP_TOKEN (required when PUSHOVER_USER_KEY is set)")
     if missing:
@@ -140,6 +146,7 @@ def validate() -> None:
              ", ".join(sorted(CF_APP_UIDS)) if CF_APP_UIDS else "(all apps)")
     log.info("Pushover       : %s", "enabled" if PUSHOVER_USER_KEY else "disabled")
     log.info("Discord        : %s", "enabled" if DISCORD_WEBHOOK_URL else "disabled")
+    log.info("ntfy           : %s", f"enabled ({NTFY_URL})" if NTFY_TOPIC else "disabled")
     log.info("Poll interval  : %s", format_duration(POLL_INTERVAL))
     log.info("Lookback buffer: %s", format_duration(MIN_LOOKBACK))
     log.info("Notify retries : %d (delay %s)", NOTIFY_RETRIES, format_duration(NOTIFY_RETRY_DELAY))
