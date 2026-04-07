@@ -93,7 +93,7 @@ jobs:
             type=raw,value=dev-${{ github.sha }},enable=${{ steps.version.outputs.is_release != 'true' }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: ${{ inputs.dry_run != true }}
