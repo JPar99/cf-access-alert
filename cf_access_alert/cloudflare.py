@@ -40,7 +40,20 @@ def _fetch_page(since: str, until: str, page: int) -> dict | None:
                       resp.status, body.get("success"), len(body.get("result", [])))
             return body
     except HTTPError as exc:
-        log.error("Cloudflare API HTTP %s — check token permissions", exc.code)
+        if exc.code in (401, 403):
+            log.error(
+                "Cloudflare API HTTP %s — check CF_API_TOKEN permissions "
+                "(needs Account > Access: Audit Logs > Read)",
+                exc.code,
+            )
+        elif 500 <= exc.code < 600:
+            log.warning(
+                "Cloudflare API HTTP %s — transient server error, "
+                "will retry on next poll",
+                exc.code,
+            )
+        else:
+            log.error("Cloudflare API HTTP %s", exc.code)
         return None
     except URLError as exc:
         log.error("Cloudflare API connection error: %s", exc.reason)
