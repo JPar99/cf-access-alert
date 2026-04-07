@@ -101,3 +101,29 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+
+      - name: Sync VERSION file on main
+        if: steps.version.outputs.is_release == 'true' && inputs.dry_run != true
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # The workflow was triggered by a tag push, so HEAD is detached
+          # at the tag commit. Switch to the default branch to commit there.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${DEFAULT_BRANCH}"
+          git checkout "${DEFAULT_BRANCH}"
+          git pull --ff-only origin "${DEFAULT_BRANCH}"
+
+          # Only commit if VERSION actually needs updating
+          CURRENT="$(tr -d '[:space:]' < VERSION)"
+          if [[ "${CURRENT}" == "${VERSION}" ]]; then
+            echo "VERSION already at ${VERSION} — nothing to sync"
+            exit 0
+          fi
+
+          echo "${VERSION}" > VERSION
+          git add VERSION
+          git commit -m "bot: sync VERSION to v${VERSION} [skip ci]"
+          git push origin "${DEFAULT_BRANCH}"
