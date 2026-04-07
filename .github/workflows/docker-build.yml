@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — build everything but skip GHCR push and GitHub Release'
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io
@@ -13,8 +19,10 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      packages: write
+      contents: write   # for ncipollo/release-action
+      packages: write   # for GHCR push
+      id-token: write   # for SLSA provenance attestation signing
+      attestations: write  # for build provenance and SBOM attestations
 
     steps:
       - name: Checkout repository
@@ -22,15 +30,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Inject version from tag into banner.py
+      - name: Determine version
+        id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "Injecting version: $VERSION"
-          sed -i "s/^VERSION = \".*\"/VERSION = \"$VERSION\"/" cf_access_alert/banner.py
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            # Manual workflow_dispatch run — synthesize a dev version
+            VERSION="0.0.0-dev-${GITHUB_SHA::7}"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Inject version into banner.py
+        run: |
+          sed -i "s/^VERSION = \".*\"/VERSION = \"${{ steps.version.outputs.version }}\"/" cf_access_alert/banner.py
           grep "^VERSION" cf_access_alert/banner.py
 
       - name: Generate changelog
         id: changelog
+        if: steps.version.outputs.is_release == 'true'
         uses: requarks/changelog-action@v1
         with:
           token: ${{ github.token }}
@@ -38,6 +59,7 @@ jobs:
           includeInvalidCommits: true
 
       - name: Create GitHub Release
+        if: steps.version.outputs.is_release == 'true' && inputs.dry_run != true
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
@@ -51,6 +73,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
+        if: inputs.dry_run != true
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -63,18 +86,21 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
+            type=semver,pattern={{version}},enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=semver,pattern={{major}},enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=raw,value=dev-${{ github.sha }},enable=${{ steps.version.outputs.is_release != 'true' }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ inputs.dry_run != true }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
