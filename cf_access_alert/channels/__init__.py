@@ -6,9 +6,9 @@ To add a new channel:
 3. Import it below and add it to ALL_CHANNELS
 """
 
-from .pushover import PushoverChannel
 from .discord import DiscordChannel
 from .ntfy import NtfyChannel
+from .pushover import PushoverChannel
 
 ALL_CHANNELS = [
     PushoverChannel(),

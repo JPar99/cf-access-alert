@@ -2,7 +2,7 @@
 
 import logging
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import config
 
@@ -104,7 +104,7 @@ def is_digest_due(next_digest_at: str | None) -> bool:
     try:
         target = datetime.strptime(
             next_digest_at, "%Y-%m-%dT%H:%M:%SZ"
-        ).replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) >= target
+        ).replace(tzinfo=UTC)
+        return datetime.now(UTC) >= target
     except (ValueError, TypeError):
         return False

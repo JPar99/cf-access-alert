@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",  # line-too-long — handled by formatter, soft-enforced
+]
+
+[tool.ruff.lint.per-file-ignores]
+# banner.py contains an ASCII-art raw string where trailing whitespace
+# is part of the visual layout — never strip it.
+"cf_access_alert/banner.py" = ["W291", "W292", "W293"]

@@ -2,8 +2,8 @@
 
 import json
 import logging
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from . import config
 from .banner import VERSION
@@ -123,11 +123,10 @@ def filter_events(events: list[dict]) -> list[dict]:
                       ev.get("user_email"), allowed, ev.get("action"))
             continue
 
-        if config.CF_APP_UIDS:
-            if ev.get("app_uid", "") not in config.CF_APP_UIDS:
-                log.debug("  SKIP (UID mismatch): event=%s not in filter set",
-                          ev.get("app_uid"))
-                continue
+        if config.CF_APP_UIDS and ev.get("app_uid", "") not in config.CF_APP_UIDS:
+            log.debug("  SKIP (UID mismatch): event=%s not in filter set",
+                      ev.get("app_uid"))
+            continue
 
         log.debug("  MATCH: email=%s allowed=%s app=%s",
                   ev.get("user_email"), allowed,

@@ -3,7 +3,7 @@
 import logging
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from . import config
 from .banner import print_banner
@@ -56,10 +56,10 @@ def main() -> None:
 
     # Always (re)calculate digest schedule on startup so DIGEST_TIME changes take effect
     if config.DIGEST_ENABLED:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         local_now = now.astimezone()
         next_dt = compute_next_digest(local_now)
-        next_digest_at = next_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        next_digest_at = next_dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         log.info("Next digest    : %s", utc_to_local(next_digest_at))
 
     # --- Channels (verify after config + state so all info is grouped) ---
@@ -71,7 +71,7 @@ def main() -> None:
     first_run = True
 
     while not shutdown.should_exit:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # --- Check if digest is due ---
@@ -83,7 +83,7 @@ def main() -> None:
             # Schedule next digest
             local_now = now.astimezone()
             next_dt = compute_next_digest(local_now)
-            next_digest_at = next_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            next_digest_at = next_dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             log.info("Next digest scheduled: %s", utc_to_local(next_digest_at))
             save(alerted_ids, last_poll, next_digest_at)
 
@@ -91,7 +91,7 @@ def main() -> None:
         if last_poll:
             last_poll_dt = datetime.strptime(
                 last_poll, "%Y-%m-%dT%H:%M:%SZ"
-            ).replace(tzinfo=timezone.utc)
+            ).replace(tzinfo=UTC)
             since_dt = last_poll_dt - timedelta(seconds=config.MIN_LOOKBACK)
 
             earliest_allowed = now - timedelta(seconds=config.MAX_CATCHUP)

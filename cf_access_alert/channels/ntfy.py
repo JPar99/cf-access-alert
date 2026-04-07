@@ -2,13 +2,12 @@
 
 import logging
 import os
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-from .base import NotificationChannel, USER_AGENT
 from ..config import format_duration
 from ..timeutil import format_event_time
-
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
+from .base import USER_AGENT, NotificationChannel
 
 log = logging.getLogger("cf-access-alert")
 

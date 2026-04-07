@@ -1,14 +1,14 @@
 """Discord webhook notification channel."""
 
-import logging
 import json
+import logging
 import os
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-from .base import NotificationChannel, USER_AGENT
 from ..config import format_duration
 from ..timeutil import format_event_time
+from .base import USER_AGENT, NotificationChannel
 
 log = logging.getLogger("cf-access-alert")
 

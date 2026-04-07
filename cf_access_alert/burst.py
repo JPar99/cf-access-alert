@@ -2,7 +2,7 @@
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import config
 
@@ -43,9 +43,9 @@ class BurstTracker:
         try:
             created = datetime.strptime(
                 event.get("created_at", ""), "%Y-%m-%dT%H:%M:%SZ"
-            ).replace(tzinfo=timezone.utc)
+            ).replace(tzinfo=UTC)
         except (ValueError, TypeError):
-            created = datetime.now(timezone.utc)
+            created = datetime.now(UTC)
         self._hits[ip].append(created)
 
     def classify(self, events: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -61,7 +61,7 @@ class BurstTracker:
             Each has keys: ip_address, count, emails, apps, countries,
             window_seconds, first_seen, last_seen.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Prune all tracked IPs first to free stale entries
         self._prune_all(now)

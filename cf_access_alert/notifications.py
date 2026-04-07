@@ -11,7 +11,7 @@ provides the same public API consumed by ``main.py``:
 
 import logging
 
-from .channels import get_active_channels, ALL_CHANNELS
+from .channels import ALL_CHANNELS, get_active_channels
 from .config import format_duration
 from .timeutil import format_event_time
 

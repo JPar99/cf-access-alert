@@ -3,12 +3,12 @@
 import json
 import logging
 import time
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from .. import config
 from ..banner import VERSION
-from ..config import redact_url, redact_payload
+from ..config import redact_payload, redact_url
 
 log = logging.getLogger("cf-access-alert")
 

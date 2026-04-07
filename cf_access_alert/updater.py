@@ -2,8 +2,9 @@
 
 import json
 import logging
-from urllib.request import Request, urlopen
+from datetime import UTC
 from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from .banner import VERSION
 
@@ -76,7 +77,7 @@ def check_for_updates() -> None:
 
 def _format_age(published_at: str) -> str:
     """Format a GitHub published_at timestamp into a human-readable age."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if not published_at:
         return "unknown date"
@@ -85,8 +86,8 @@ def _format_age(published_at: str) -> str:
         # GitHub format: 2026-03-20T16:35:05Z
         pub_dt = datetime.strptime(
             published_at, "%Y-%m-%dT%H:%M:%SZ"
-        ).replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
+        ).replace(tzinfo=UTC)
+        now = datetime.now(UTC)
         delta = now - pub_dt
 
         days = delta.days
