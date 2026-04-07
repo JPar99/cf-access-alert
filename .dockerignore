@@ -9,3 +9,5 @@ Makefile
 docs/
 docker-compose.yml
 docker-compose.dev.yml
+tests/
+pyproject.toml
