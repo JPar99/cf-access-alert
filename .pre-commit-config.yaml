@@ -1,0 +1,48 @@
+# Pre-commit hooks for cf-access-alert.
+#
+# One-time setup (per clone):
+#   pip install pre-commit --break-system-packages
+#   pre-commit install
+#
+# Hooks then run automatically on every `git commit`. To run them
+# manually against the whole repo: `pre-commit run --all-files`.
+# To skip hooks for a single commit (e.g. WIP): `git commit --no-verify`.
+#
+# This config mirrors the checks in .github/workflows/ci.yml so that
+# anything that would fail CI also fails locally before pushing.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        # banner.py contains an ASCII-art raw string where trailing
+        # whitespace is part of the visual layout — never strip it.
+        exclude: ^cf_access_alert/banner\.py$
+      - id: end-of-file-fixer
+        exclude: ^cf_access_alert/banner\.py$
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.9
+    hooks:
+      - id: ruff
+        name: ruff check
+        args: [--config=pyproject.toml]
+        files: ^(cf_access_alert/|run\.py$|tests/)
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest tests/ -q
+        language: system
+        pass_filenames: false
+        # Only run when Python files change — no point running tests
+        # for a README typo fix.
+        files: \.py$
+        stages: [pre-commit]

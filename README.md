@@ -73,7 +73,7 @@ The minimum required:
          ├──────> Pushover
          ├──────> Discord
          └──────> ntfy
-         
+
          Daily digest ──> all channels at DIGEST_TIME
 ```
 
