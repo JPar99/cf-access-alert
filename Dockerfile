@@ -1,4 +1,4 @@
-FROM python:3.13-alpine
+FROM python:3.14-alpine
 
 # Build argument: version string injected by CI from the git tag.
 # When not provided (e.g. local `make dev` builds), the env var below
