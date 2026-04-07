@@ -1,0 +1,55 @@
+name: Sync VERSION file
+
+# After a GitHub Release is published, write the released version into
+# the VERSION file on the default branch and commit it back. This keeps
+# the file in sync for local development (`make dev`) and for anyone
+# reading the repo, without requiring manual bumps before tagging.
+#
+# The production image is NOT affected by this file — docker-build.yml
+# passes VERSION as a --build-arg from the git tag, so the image is
+# always stamped with the correct version regardless of the file.
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+
+      - name: Determine version from latest release
+        id: version
+        run: |
+          # On release events, github.event.release.tag_name is set.
+          # On manual dispatch, fall back to the latest published release via gh CLI.
+          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG=$(gh release view --json tagName --jq .tagName)
+          fi
+          VERSION="${TAG#v}"
+          echo "Tag: $TAG"
+          echo "Version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Write VERSION file
+        run: |
+          echo "${{ steps.version.outputs.version }}" > VERSION
+          cat VERSION
+
+      - name: Commit updated VERSION
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "bot: sync VERSION to v${{ steps.version.outputs.version }} [skip ci]"
+          file_pattern: VERSION

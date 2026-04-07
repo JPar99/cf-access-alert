@@ -44,11 +44,6 @@ jobs:
           echo "Version: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Inject version into banner.py
-        run: |
-          sed -i "s/^VERSION = \".*\"/VERSION = \"${{ steps.version.outputs.version }}\"/" cf_access_alert/banner.py
-          grep "^VERSION" cf_access_alert/banner.py
-
       - name: Generate changelog
         id: changelog
         if: steps.version.outputs.is_release == 'true'
@@ -100,6 +95,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max

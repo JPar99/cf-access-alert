@@ -12,3 +12,4 @@ docker-compose.dev.yml
 tests/
 pyproject.toml
 requirements-dev.txt
+bin/

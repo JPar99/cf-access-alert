@@ -1,6 +1,37 @@
-"""Startup banner — ASCII art logo and version info."""
+"""Startup banner — ASCII art logo and version info.
 
-VERSION = "2.2.1"
+VERSION resolution order:
+1. CF_ACCESS_ALERT_VERSION environment variable (set in production images
+   from the docker --build-arg, so the image is always stamped with the
+   tag's version regardless of what the VERSION file says)
+2. VERSION file at the repo root (used for local development and as a
+   fallback inside images that didn't get a build-arg)
+3. "0.0.0-dev" if neither is available (e.g. running from a clone with
+   no VERSION file)
+"""
+
+import os
+from pathlib import Path
+
+
+def _resolve_version() -> str:
+    env = os.environ.get("CF_ACCESS_ALERT_VERSION", "").strip()
+    if env:
+        return env
+
+    # banner.py lives in cf_access_alert/, so the repo root is two parents up
+    version_file = Path(__file__).resolve().parent.parent / "VERSION"
+    try:
+        text = version_file.read_text().strip()
+        if text:
+            return text
+    except OSError:
+        pass
+
+    return "0.0.0-dev"
+
+
+VERSION = _resolve_version()
 
 BANNER = r"""
                                               
