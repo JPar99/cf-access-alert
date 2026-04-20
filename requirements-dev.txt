@@ -1,5 +1,5 @@
 # Development dependencies — used by CI and pre-commit hooks.
 # Runtime is stdlib-only; nothing here ships in the production Docker image.
 # Managed by Dependabot (see .github/dependabot.yml).
-ruff==0.15.10
+ruff==0.15.11
 pytest==9.0.3
